@@ -1,0 +1,18 @@
+import { Medicine } from "../types";
+
+export const medicines: Medicine[] = [
+  { id: "med1", name: "Dolo 650", generic: "Paracetamol 650mg", brand: "Micro Labs", category: "Pain Relief", price: 32, discountPct: 20, finalPrice: 25.6, stock: true, rxRequired: false, image: "💊", rating: 4.8, description: "For fever and mild to moderate pain", packSize: "15 tablets" },
+  { id: "med2", name: "Pantop 40", generic: "Pantoprazole 40mg", brand: "Aristo", category: "Gastro", price: 145, discountPct: 35, finalPrice: 94.3, stock: true, rxRequired: true, image: "💊", rating: 4.6, description: "For acid reflux and GERD", packSize: "15 tablets" },
+  { id: "med3", name: "Cetrizine 10mg", generic: "Cetirizine HCl 10mg", brand: "Sun Pharma", category: "Allergy", price: 28, discountPct: 15, finalPrice: 23.8, stock: true, rxRequired: false, image: "💊", rating: 4.5, description: "Antihistamine for allergies", packSize: "10 tablets" },
+  { id: "med4", name: "Azithral 500", generic: "Azithromycin 500mg", brand: "Alembic", category: "Antibiotic", price: 185, discountPct: 25, finalPrice: 138.8, stock: true, rxRequired: true, image: "💊", rating: 4.7, description: "Broad-spectrum antibiotic", packSize: "5 tablets" },
+  { id: "med5", name: "Shelcal 500", generic: "Calcium Carbonate 500mg", brand: "Elder", category: "Supplements", price: 215, discountPct: 10, finalPrice: 193.5, stock: true, rxRequired: false, image: "💊", rating: 4.4, description: "Calcium & Vitamin D supplement", packSize: "30 tablets" },
+  { id: "med6", name: "Glycomet 500", generic: "Metformin 500mg", brand: "USV", category: "Diabetes", price: 65, discountPct: 30, finalPrice: 45.5, stock: true, rxRequired: true, image: "💊", rating: 4.6, description: "For Type 2 Diabetes management", packSize: "20 tablets" },
+  { id: "med7", name: "Telma 40", generic: "Telmisartan 40mg", brand: "Glenmark", category: "Cardiac", price: 198, discountPct: 20, finalPrice: 158.4, stock: true, rxRequired: true, image: "💊", rating: 4.5, description: "For hypertension", packSize: "10 tablets" },
+  { id: "med8", name: "Vitamin D3 60K", generic: "Cholecalciferol 60000 IU", brand: "Sanofi", category: "Supplements", price: 125, discountPct: 18, finalPrice: 102.5, stock: true, rxRequired: false, image: "💊", rating: 4.7, description: "Weekly Vitamin D supplement", packSize: "4 capsules" },
+  { id: "med9", name: "Montek LC", generic: "Montelukast + Levocetirizine", brand: "Sun Pharma", category: "Respiratory", price: 155, discountPct: 22, finalPrice: 120.9, stock: false, rxRequired: true, image: "💊", rating: 4.8, description: "For asthma and allergic rhinitis", packSize: "10 tablets" },
+  { id: "med10", name: "Becosules", generic: "Multivitamin B-Complex", brand: "Pfizer", category: "Supplements", price: 115, discountPct: 12, finalPrice: 101.2, stock: true, rxRequired: false, image: "💊", rating: 4.5, description: "Complete B-complex multivitamin", packSize: "30 capsules" },
+  { id: "med11", name: "Crocin Advance", generic: "Paracetamol 500mg", brand: "GSK", category: "Pain Relief", price: 42, discountPct: 10, finalPrice: 37.8, stock: true, rxRequired: false, image: "💊", rating: 4.6, description: "Fast-acting pain and fever relief", packSize: "20 tablets" },
+  { id: "med12", name: "Combiflam", generic: "Ibuprofen + Paracetamol", brand: "Sanofi", category: "Pain Relief", price: 38, discountPct: 15, finalPrice: 32.3, stock: true, rxRequired: false, image: "💊", rating: 4.4, description: "For pain and inflammation", packSize: "20 tablets" },
+];
+
+export const medicineCategories = ["All", "Pain Relief", "Gastro", "Allergy", "Antibiotic", "Supplements", "Diabetes", "Cardiac", "Respiratory"];
