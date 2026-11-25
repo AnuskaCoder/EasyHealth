@@ -10,9 +10,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.3-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
 [![Vite](https://img.shields.io/badge/Vite-4.5-646CFF?style=flat&logo=vite)](https://vitejs.dev/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-easyhealth--xi.vercel.app-blue?style=flat&logo=vercel)](https://easyhealth-xi.vercel.app)
 
-[Live Demo](#) · [Features](#features) · [Tech Stack](#tech-stack) · [Getting Started](#getting-started)
+[🌐 Live Demo](https://easyhealth-xi.vercel.app) · [Features](#features) · [Tech Stack](#tech-stack) · [Getting Started](#getting-started)
 
 </div>
 
