@@ -14,6 +14,8 @@ const medicines = [
   { id: "med8", name: "Vitamin D3 60K", generic: "Cholecalciferol 60000 IU", brand: "Sanofi", category: "Supplements", price: 125, discountPct: 18, finalPrice: 102.5, stock: true, rxRequired: false, rating: 4.7, description: "Weekly Vitamin D supplement", packSize: "4 capsules" },
   { id: "med9", name: "Montek LC", generic: "Montelukast + Levocetirizine", brand: "Sun Pharma", category: "Respiratory", price: 155, discountPct: 22, finalPrice: 120.9, stock: false, rxRequired: true, rating: 4.8, description: "For asthma and allergic rhinitis", packSize: "10 tablets" },
   { id: "med10", name: "Becosules", generic: "B-Complex Multivitamin", brand: "Pfizer", category: "Supplements", price: 115, discountPct: 12, finalPrice: 101.2, stock: true, rxRequired: false, rating: 4.5, description: "Complete B-complex multivitamin", packSize: "30 capsules" },
+  { id: "med11", name: "Crocin Advance", generic: "Paracetamol 500mg", brand: "GSK", category: "Pain Relief", price: 42, discountPct: 10, finalPrice: 37.8, stock: true, rxRequired: false, rating: 4.6, description: "Fast-acting pain and fever relief", packSize: "20 tablets" },
+  { id: "med12", name: "Combiflam", generic: "Ibuprofen + Paracetamol", brand: "Sanofi", category: "Pain Relief", price: 38, discountPct: 15, finalPrice: 32.3, stock: true, rxRequired: false, rating: 4.4, description: "For pain and inflammation", packSize: "20 tablets" },
 ];
 
 // GET /api/pharmacy/medicines

@@ -2,7 +2,9 @@
 EasyHealth AI/ML Microservice - RAG (Retrieval-Augmented Generation) Medical Q&A
 Grounds responses in verified guidelines (WHO, AHA, ADA, GINA, KDIGO, ATA, ICMR) & Patient EHR
 """
-from typing import Dict, Any, List
+import os
+from typing import Dict, Any, List, Optional
+import requests
 
 TRUSTED_KNOWLEDGE_BASE = [
     {
@@ -71,7 +73,51 @@ TRUSTED_KNOWLEDGE_BASE = [
     }
 ]
 
-def query_rag_engine(user_query: str, patient_context: Dict[str, Any] = None) -> Dict[str, Any]:
+def _generate_online_answer(user_query: str, sources: List[Dict[str, str]]) -> Optional[str]:
+    """Use Gemini only after the user explicitly opts in; never send EHR context."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None
+
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    source_text = "\n".join(
+        f"- {source.get('title', source.get('guideline_title', 'Clinical source'))} ({source['authority']}): {source['quote']}"
+        for source in sources
+    )
+    prompt = f"""You are an evidence-aware health education assistant, not a doctor.
+Answer the user's health question in plain language. Do not claim to diagnose, prescribe,
+or replace a clinician. Do not invent test results, citations, or certainty. If the question
+is underspecified, state what details matter and ask concise follow-up questions. Give safe,
+practical next steps and clear red flags. For a possible immediate emergency in India, advise
+calling 112 or 108. Distinguish general information from personalized medical advice.
+
+Use these retrieved references only as supporting context; do not fabricate additional sources:
+{source_text or 'No matching reference passages were retrieved.'}
+
+User question:
+{user_query[:4000]}
+"""
+    try:
+        response = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            params={"key": api_key},
+            json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}},
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        parts = payload.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        answer = "\n".join(part.get("text", "") for part in parts).strip()
+        return answer or None
+    except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
+        return None
+
+
+def query_rag_engine(
+    user_query: str,
+    patient_context: Dict[str, Any] = None,
+    use_online_ai: bool = False,
+) -> Dict[str, Any]:
     """
     Retrieves matching clinical guideline passages and generates grounded context.
     Contextualizes with patient EHR, biomarkers, active medications, and contraindications.
@@ -91,10 +137,10 @@ def query_rag_engine(user_query: str, patient_context: Dict[str, Any] = None) ->
     # Default guideline if no specific keywords match
     if not matched_sources:
         matched_sources.append({
-            "title": "ICMR Clinical Practice Evidence Standards",
-            "authority": "Indian Council of Medical Research (ICMR)",
-            "quote": "Personalized outpatient health management grounded in peer-reviewed clinical protocols mitigates adverse drug events and improves long-term outcomes.",
-            "url": "https://www.icmr.gov.in"
+            "title": "No matching clinical reference retrieved",
+            "authority": "EasyHealth retrieval notice",
+            "quote": "No topic-specific guideline passage matched this question; verify general guidance with a qualified clinician.",
+            "url": ""
         })
 
     # Extract EHR context if provided
@@ -138,10 +184,15 @@ def query_rag_engine(user_query: str, patient_context: Dict[str, Any] = None) ->
         f"2. Consult your treating specialist before altering medication dosages.\n"
     )
 
+    online_answer = _generate_online_answer(user_query, matched_sources) if use_online_ai else None
+    if online_answer:
+        response_text = online_answer
+
     return {
         "query": user_query,
         "answer": response_text,
         "retrieved_sources": matched_sources,
-        "grounding_confidence": 0.98,
+        "provider": "Gemini" if online_answer else "Local guideline retrieval",
+        "grounding_confidence": 0.65 if online_answer else 0.45,
         "is_emergency": any(kw in q_lower for kw in ["chest pain", "heart attack", "stroke", "unconscious", "emergency"])
     }

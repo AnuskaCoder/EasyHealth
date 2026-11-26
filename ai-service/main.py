@@ -40,8 +40,9 @@ class SummarizeRequest(BaseModel):
     biomarkers: List[BiomarkerItem]
 
 class RagChatRequest(BaseModel):
-    query: str
+    query: str = Field(..., min_length=1, max_length=4000)
     patient_context: Optional[Dict[str, Any]] = None
+    use_online_ai: bool = False
 
 class OcrRequest(BaseModel):
     file_name: str
@@ -76,7 +77,7 @@ def summarize_report(req: SummarizeRequest):
 @app.post("/ai/rag-chat")
 def rag_chat(req: RagChatRequest):
     try:
-        result = query_rag_engine(req.query, req.patient_context)
+        result = query_rag_engine(req.query, req.patient_context, req.use_online_ai)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

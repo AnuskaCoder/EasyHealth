@@ -62,4 +62,22 @@ describe("clinicalAiEngine", () => {
     const result = processClinicalQuery("my cholesterol levels are high how to reduce them", { profile: mockProfile, reports: [], medications: [] });
     expect(result.answer.toLowerCase()).toMatch(/cholesterol|ldl|hdl|cardiac|heart|diet|dash/);
   });
+
+  it("offers relevant next steps for dizziness instead of generic help", () => {
+    const result = processClinicalQuery("I have been feeling dizzy", { profile: mockProfile, reports: [], medications: [] });
+    expect(result.category).toMatch(/Dizziness/);
+    expect(result.answer.toLowerCase()).toMatch(/sit or lie down|dizziness/);
+  });
+
+  it("flags severe breathing difficulty as an emergency", () => {
+    const result = processClinicalQuery("I can't breathe and my lips look blue", { profile: mockProfile, reports: [], medications: [] });
+    expect(result.isEmergency).toBe(true);
+    expect(result.answer).toMatch(/112|108/);
+  });
+
+  it("asks for useful details when it cannot answer specifically", () => {
+    const result = processClinicalQuery("Can you explain this?", { profile: mockProfile, reports: [], medications: [] });
+    expect(result.answer).toMatch(/don't have enough information/i);
+    expect(result.answer).toMatch(/when it started/i);
+  });
 });

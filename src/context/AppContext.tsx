@@ -46,13 +46,13 @@ interface AppContextType {
   addMedication: (m: Medication) => void;
   // Pharmacy Cart & Orders
   cart: CartItem[];
-  addToCart: (med: Medicine) => void;
+  addToCart: (med: Medicine) => boolean;
   removeFromCart: (medId: string) => void;
   updateCartQuantity: (medId: string, delta: number) => void;
   clearCart: () => void;
   cartCount: number;
   orders: PharmacyOrder[];
-  placeOrder: (order: Omit<PharmacyOrder, "id" | "date" | "status">) => void;
+  placeOrder: (order: Omit<PharmacyOrder, "id" | "date" | "status"> & Partial<Pick<PharmacyOrder, "id" | "date" | "status">>) => string;
   // Home Collection
   homeBookings: HomeCollectionBooking[];
   addHomeBooking: (booking: Omit<HomeCollectionBooking, "id" | "status">) => void;
@@ -440,8 +440,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     return defaultMedications;
   });
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [orders, setOrders] = useState<PharmacyOrder[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const userId = loadSession()?.userId || "guest";
+    try { return JSON.parse(localStorage.getItem(`eh_cart_${userId}`) || "[]") as CartItem[]; }
+    catch { return []; }
+  });
+  const [orders, setOrders] = useState<PharmacyOrder[]>(() => {
+    const userId = loadSession()?.userId || "guest";
+    try { return JSON.parse(localStorage.getItem(`eh_orders_${userId}`) || "[]") as PharmacyOrder[]; }
+    catch { return []; }
+  });
   const [homeBookings, setHomeBookings] = useState<HomeCollectionBooking[]>(defaultHomeBookings);
   const [consentPermissions, setConsentPermissions] = useState<ConsentPermission[]>(defaultConsentPermissions);
   const [doctorPrescriptions, setDoctorPrescriptions] = useState<DoctorPrescription[]>(defaultDoctorPrescriptions);
@@ -472,6 +480,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const session = loadSession();
     if (session) localStorage.setItem(`eh_medications_${session.userId}`, JSON.stringify(medications));
   }, [medications]);
+
+  useEffect(() => {
+    const userId = loadSession()?.userId || "guest";
+    localStorage.setItem(`eh_cart_${userId}`, JSON.stringify(cart));
+  }, [cart]);
+
+  useEffect(() => {
+    const userId = loadSession()?.userId || "guest";
+    localStorage.setItem(`eh_orders_${userId}`, JSON.stringify(orders));
+  }, [orders]);
 
   // Real-time Registration Methods
   const registerPatient = (newProfile: PatientProfile) => {
@@ -514,6 +532,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAppointments([]);
     setMedications([]);
     setCart([]);
+    setOrders([]);
   };
 
   // Helper actions
@@ -562,6 +581,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Cart operations
   const addToCart = (med: Medicine) => {
+    if (!med.stock) return false;
     setCart((prev) => {
       const existing = prev.find((item) => item.medicine.id === med.id);
       if (existing) {
@@ -571,6 +591,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       return [...prev, { medicine: med, quantity: 1 }];
     });
+    return true;
   };
 
   const removeFromCart = (medId: string) => {
@@ -595,12 +616,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
-  const placeOrder = (orderData: Omit<PharmacyOrder, "id" | "date" | "status">) => {
+  const placeOrder = (orderData: Omit<PharmacyOrder, "id" | "date" | "status"> & Partial<Pick<PharmacyOrder, "id" | "date" | "status">>) => {
     const newOrder: PharmacyOrder = {
       ...orderData,
-      id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
-      date: new Date().toISOString().split("T")[0],
-      status: "Processing",
+      id: orderData.id || `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+      date: orderData.date || new Date().toISOString().split("T")[0],
+      status: orderData.status || "Processing",
     };
     setOrders((prev) => [newOrder, ...prev]);
     clearCart();
@@ -610,6 +631,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       type: "order",
       actionPage: "pharmacy",
     });
+    return newOrder.id;
   };
 
   // Home Collection

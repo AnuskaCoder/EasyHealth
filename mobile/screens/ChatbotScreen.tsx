@@ -7,32 +7,63 @@ import {
   TextInput,
   TouchableOpacity,
 } from "react-native";
+import { processClinicalQuery } from "../../src/services/clinicalAiEngine";
+
+type ChatEntry = { id: string; sender: "bot" | "user"; text: string };
+
+const mobileGuestContext = {
+  profile: {
+    id: "mobile-guest",
+    name: "",
+    age: 0,
+    gender: "Other" as const,
+    dob: "",
+    phone: "",
+    email: "",
+    bloodGroup: "",
+    height: 0,
+    weight: 0,
+    allergies: [],
+    chronicConditions: [],
+    emergencyContact: "",
+  },
+  reports: [],
+  medications: [],
+};
 
 export const ChatbotScreen: React.FC = () => {
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<ChatEntry[]>([
     {
       id: "1",
       sender: "bot",
-      text: "Hello! I am your EasyHealth AI Clinical Companion grounded in WHO & AHA guidelines. How can I help with your reports or health questions today?",
+      text: "Hello! I can help with common health questions and explain general next steps. Your mobile health records are not connected here, and I can't diagnose or replace a clinician. What would you like help with?",
     },
   ]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSend = () => {
-    if (!input.trim()) return;
-    const userMsg = { id: Date.now().toString(), sender: "user", text: input.trim() };
+    const query = input.trim();
+    if (!query || loading) return;
+    const userMsg: ChatEntry = { id: Date.now().toString(), sender: "user", text: query };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setLoading(true);
 
     setTimeout(() => {
+      const isHealthSummary = /health summary|my health|overall health|health status/i.test(query);
+      const answer = isHealthSummary
+        ? "Your health profile and reports are not connected to this mobile demo, so I can't generate a personal health summary. Please use the web app's Medical Records and Profile pages or speak with your clinician."
+        : processClinicalQuery(query, mobileGuestContext).answer;
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           sender: "bot",
-          text: "Based on your latest CBC report, your Hemoglobin is 11.4 g/dL (mild iron-deficiency anemia). Combining dietary iron with Vitamin C and continuing your Ferrous Sulphate dosage is advised.",
+          text: answer,
         },
       ]);
+      setLoading(false);
     }, 1000);
   };
 
@@ -40,7 +71,7 @@ export const ChatbotScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Sources badge */}
       <View style={styles.topBadge}>
-        <Text style={styles.badgeText}>🛡️ Grounded in WHO &amp; AHA Clinical Guidelines</Text>
+        <Text style={styles.badgeText}>General information only · Not a diagnosis</Text>
       </View>
 
       <ScrollView style={styles.chatArea} contentContainerStyle={styles.chatContent}>
@@ -62,6 +93,7 @@ export const ChatbotScreen: React.FC = () => {
             </Text>
           </View>
         ))}
+        {loading && <Text style={styles.typingText}>Reviewing your question…</Text>}
       </ScrollView>
 
       {/* Input */}
@@ -72,8 +104,10 @@ export const ChatbotScreen: React.FC = () => {
           onChangeText={setInput}
           placeholder="Ask clinical question..."
           placeholderTextColor="#94a3b8"
+          editable={!loading}
+          onSubmitEditing={handleSend}
         />
-        <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+        <TouchableOpacity style={[styles.sendBtn, loading && styles.sendBtnDisabled]} onPress={handleSend} disabled={loading}>
           <Text style={styles.sendIcon}>➤</Text>
         </TouchableOpacity>
       </View>
@@ -142,4 +176,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendIcon: { color: "#ffffff", fontSize: 14 },
+  sendBtnDisabled: { opacity: 0.5 },
+  typingText: { color: "#64748b", fontSize: 12, fontStyle: "italic" },
 });

@@ -15,6 +15,7 @@ import { MedicalRecordsPage } from "./pages/patient/MedicalRecordsPage";
 import { AppointmentsPage } from "./pages/patient/AppointmentsPage";
 import { ChatbotPage } from "./pages/patient/ChatbotPage";
 import { MedicalProfilePage } from "./pages/patient/MedicalProfilePage";
+import { BloodBankPage } from "./pages/patient/BloodBankPage";
 import { EmergencyPage } from "./pages/EmergencyPage";
 
 // Doctor Pages
@@ -96,6 +97,9 @@ const AppContent: React.FC = () => {
         return <ChatbotPage />;
       case "profile":
         return <MedicalProfilePage />;
+      case "blood-bank":
+      case "blood-donation":
+        return <BloodBankPage />;
       case "emergency":
         return <EmergencyPage />;
       default:

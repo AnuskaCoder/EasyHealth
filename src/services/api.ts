@@ -253,6 +253,30 @@ export const emergencyApi = {
   },
 };
 
+// ── Urgent Blood Requests ────────────────────────────────────────────────────
+export const bloodBankApi = {
+  async getRequests() {
+    return apiFetch<{ data: any[]; count: number }>("/blood-bank/requests");
+  },
+
+  async createRequest(data: {
+    bloodGroup: string; unitsNeeded: number; component: string; urgency: string;
+    hospital: string; area: string; reason?: string; contactPhone: string; contactConsent: boolean;
+  }) {
+    return apiFetch<{ data: any }>("/blood-bank/requests", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async respondToRequest(id: string) {
+    return apiFetch<{ data: { requestId: string; donorsResponded: number } }>(`/blood-bank/requests/${encodeURIComponent(id)}/respond`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  },
+};
+
 // ── Backend health check ──────────────────────────────────────────────────────
 export async function checkBackendHealth(): Promise<boolean> {
   const result = await apiFetch<{ status: string }>("/health");

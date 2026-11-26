@@ -189,3 +189,30 @@ CREATE TABLE IF NOT EXISTS rag_document_chunks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rag_category ON rag_document_chunks(category);
+
+-- URGENT BLOOD REQUESTS (contact details are shared only after explicit consent)
+CREATE TABLE IF NOT EXISTS blood_requests (
+    id VARCHAR(80) PRIMARY KEY,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blood_group VARCHAR(3) NOT NULL,
+    units_needed INT NOT NULL CHECK (units_needed BETWEEN 1 AND 10),
+    component VARCHAR(40) NOT NULL,
+    urgency VARCHAR(20) NOT NULL CHECK (urgency IN ('CRITICAL', 'HIGH', 'SCHEDULED')),
+    hospital VARCHAR(255) NOT NULL,
+    area VARCHAR(255) NOT NULL,
+    contact_phone VARCHAR(40) NOT NULL,
+    contact_consent BOOLEAN NOT NULL DEFAULT FALSE,
+    reason TEXT NOT NULL DEFAULT '',
+    status VARCHAR(20) NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Fulfilled', 'Closed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS blood_request_responses (
+    request_id VARCHAR(80) NOT NULL REFERENCES blood_requests(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (request_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_blood_requests_open_created ON blood_requests(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_blood_requests_blood_group ON blood_requests(blood_group, status);

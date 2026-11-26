@@ -103,16 +103,25 @@ export function processClinicalQuery(rawQuery: string, ctx: PatientContext): Cli
     /radiat|left arm|jaw|neck|sweat|breathless|severe|crush/.test(lower);
   const isStroke = /stroke|facial droop|face droop|arm weak|slurred|can.t speak|sudden numb/.test(lower);
   const isThunderclap = /thunderclap|worst headache of my life|explosive head/.test(lower);
-  const isUnconscious = /unconscious|not breathing|no pulse|passed out|overdose/.test(lower);
+  const isUnconscious = /unconscious|not breathing|no pulse|passed out|overdose|seizure that won't stop/.test(lower);
+  const isSevereBreathing = /can't breathe|cannot breathe|severe difficulty breathing|struggling to breathe|blue lips/.test(lower);
+  const isSevereBleeding = /heavy bleeding|bleeding won't stop|uncontrolled bleeding/.test(lower);
+  const isAnaphylaxis = /throat (swelling|tightening)|tongue (swelling|swollen)|anaphylaxis/.test(lower);
 
-  if (isCardiacEmergency || isStroke || isThunderclap || isUnconscious) {
+  if (isCardiacEmergency || isStroke || isThunderclap || isUnconscious || isSevereBreathing || isSevereBleeding || isAnaphylaxis) {
     const specific = isCardiacEmergency
-      ? "The symptoms you described — chest pain radiating with sweating or breathlessness — match **Acute Coronary Syndrome (Heart Attack)**. Every minute without treatment causes permanent heart muscle damage."
+      ? "Chest discomfort with these associated symptoms can indicate a time-critical heart problem. I can't diagnose it here; urgent in-person assessment is needed."
       : isStroke
-      ? "Sudden face drooping, arm weakness, or slurred speech are the **FAST warning signs of a stroke**. Clot-dissolving medication must be given within **4.5 hours** of onset."
+      ? "Sudden face drooping, arm weakness, or speech difficulty can be signs of a stroke. This needs immediate emergency assessment."
       : isThunderclap
-      ? "A headache that reaches peak intensity within 60 seconds ('thunderclap') must be evaluated for **subarachnoid hemorrhage** with an urgent CT scan."
-      : "Loss of consciousness or absent pulse requires **immediate CPR and emergency services**.";
+      ? "A sudden, exceptionally severe headache needs immediate emergency assessment."
+      : isSevereBreathing
+      ? "Severe breathing difficulty or blue lips can be life-threatening and need immediate help."
+      : isSevereBleeding
+      ? "Bleeding that won't stop needs immediate emergency care."
+      : isAnaphylaxis
+      ? "Throat or tongue swelling can be a severe allergic reaction and needs immediate emergency care."
+      : "Loss of consciousness, absent pulse, or a prolonged seizure requires immediate emergency help.";
 
     return {
       category: "Emergency",
@@ -127,6 +136,76 @@ ${specific}
 - Tell someone nearby what is happening`,
       sources: [KB.aha_emergency],
       suggestedActions: [{ label: "Find Nearest Emergency Hospital", action: "emergency", page: "emergency" }],
+    };
+  }
+
+  // ── 1b. GREETINGS & CASUAL INTERACTION ────────────────────────────────────
+  const isGreeting = /^(hi|hello|hey|greetings|good morning|good afternoon|good evening|howdy|hola)(\s.*)?$/i.test(lower);
+  const isIdentityQuery = /who are you|what can you do|what are you|help me|how does this work|introduce yourself/i.test(lower);
+  const isGratitude = /^(thanks|thank you|thx|awesome|great|appreciated|bye|goodbye|see you)(\s.*)?$/i.test(lower);
+
+  if (isGreeting || isIdentityQuery) {
+    const hbVal = findBiomarker(reports, "hemoglobin");
+    return {
+      category: "Greetings & Assistant Info",
+      answer: `### 👋 Hello ${name}! How can I assist you with your health today?
+
+I am your **EasyHealth Clinical AI Companion**, grounded in verified medical evidence from **WHO, AHA, ADA, GINA, and ICMR**, directly synchronized with your health profile.
+
+**Here is what I can do for you right now:**
+• 🩸 **Analyze Your Labs**: Interpret your biomarkers (e.g. Hemoglobin ${hbVal ? `${hbVal.value} ${hbVal.unit}` : "tracking"}, Lipids, Blood Sugar)
+• 💊 **Medication & Safety Review**: Check your active medicines, identify low stock, and flag contraindications
+• 🩺 **Symptom Assessment**: Triaging symptoms (fever, cough, headaches, stomach pain) with clear clinical guidance
+• 🩸 **Urgent Blood Bank**: Check nearby urgent blood requirements or request blood donations immediately
+• 👨‍⚕️ **Doctor Discovery**: Recommend the right specialist based on your symptoms
+
+Feel free to ask me any question or tap one of the suggested prompts below!`,
+      sources: [KB.icmr_diet],
+      suggestedActions: [
+        { label: "My Health Summary", action: "health_summary" },
+        { label: "Check My Medications", action: "interaction_check" },
+        { label: "Urgent Blood Bank", action: "blood_bank", page: "blood-bank" },
+        { label: "Find a Specialist", action: "doctors", page: "find-doctors" },
+      ],
+    };
+  }
+
+  if (isGratitude) {
+    return {
+      category: "Assistant Response",
+      answer: `### You're very welcome, ${name}! 💙
+
+I'm always here 24/7 whenever you need health advice, lab explanations, medication checks, or doctor recommendations.
+
+Take good care of your health, stay hydrated, and don't hesitate to ask if any other questions arise!`,
+      sources: [],
+      suggestedActions: [
+        { label: "My Health Summary", action: "health_summary" },
+        { label: "Pharmacy & Refills", action: "pharmacy", page: "pharmacy" },
+      ],
+    };
+  }
+
+  // ── 1c. URGENT BLOOD DONATION & BLOOD BANK QUERY ──────────────────────────
+  if (/blood donation|blood bank|donate blood|need blood|receive blood|urgent blood|platelet donation|plasma donation|blood unit/i.test(lower)) {
+    const userBlood = profile?.bloodGroup || "your registered blood group";
+    return {
+      category: "Urgent Blood Network",
+      answer: `### 🩸 EasyHealth Urgent Blood & Donation Network
+
+${name}, your registered blood group is **${userBlood}**.
+
+**How the Urgent Blood Network works:**
+1. **Urgent Nearby Needs**: View real-time emergency blood requests from local hospitals (Apollo, Fortis, Manipal) filtered by blood group.
+2. **Instant Blood Request**: If you or a loved one urgently needs blood units or platelets, post an urgent broadcast to notify verified donors within 10 km.
+3. **Live Blood Bank Stock**: Check and reserve verified, tested blood units (PRBC, Platelets, FFP) with express delivery.
+4. **Register as Volunteer Donor**: Join our life-saver network to receive emergency SOS alerts when your blood type is critically needed.`,
+      sources: [KB.icmr_diet],
+      suggestedActions: [
+        { label: "Open Urgent Blood Bank", action: "blood_bank", page: "blood-bank" },
+        { label: "Request Blood Immediately", action: "blood_bank", page: "blood-bank" },
+        { label: "Register as Donor", action: "blood_bank", page: "blood-bank" },
+      ],
     };
   }
 
@@ -711,6 +790,57 @@ ${profile?.allergies?.length ? `- Your recorded allergies (${profile.allergies.j
     };
   }
 
+  // Common health questions that previously fell through to the generic help text.
+  const symptomTopics = [
+    {
+      pattern: /cough|sore throat|sneez|runny nose|nasal congestion|phlegm|cold symptoms/,
+      title: "Cough, Cold & Sore Throat",
+      guidance: "Rest, drink fluids, and consider warm drinks or saline gargles for comfort. Avoid smoke. A cough can have many causes, so I can't identify the cause from a message alone.",
+      urgent: "Get urgent help for severe breathing difficulty, blue lips, confusion, coughing blood, or rapidly worsening symptoms. Arrange a clinician review for persistent fever, worsening symptoms, or a cough lasting more than 3 weeks.",
+      source: KB.who_fever,
+    },
+    {
+      pattern: /dizz|vertigo|lightheaded|faint|balance problem/,
+      title: "Dizziness & Lightheadedness",
+      guidance: "Sit or lie down somewhere safe and avoid driving or climbing until it passes. If you can safely drink, take small sips of water. Dizziness has many possible causes; note when it started, triggers, medicines, and any associated symptoms.",
+      urgent: "Call emergency services for dizziness with fainting, chest pain, severe headache, trouble speaking, one-sided weakness, new vision loss, or inability to walk. Seek medical advice if it is new, recurrent, or persistent.",
+      source: KB.aha_emergency,
+    },
+    {
+      pattern: /urinary|urine burning|burning when (i )?pee|painful urination|uti|blood in (my )?urine/,
+      title: "Urinary Symptoms",
+      guidance: "Burning, urgency, or frequent urination can have several causes and may need a urine test. Drink normally and arrange a clinician assessment rather than starting leftover antibiotics.",
+      urgent: "Seek same-day care for fever or chills with urinary symptoms, back/flank pain, vomiting, visible blood, pregnancy, or feeling very unwell. Inability to pass urine is urgent.",
+      source: KB.kdigo_renal,
+    },
+    {
+      pattern: /period|menstrual|menstruat|missed period|vaginal bleeding|pregnan|contracept|birth control/,
+      title: "Reproductive & Pregnancy Health",
+      guidance: "Cycle changes, bleeding, and pregnancy questions depend on timing and personal history. If pregnancy is possible, a home test after a missed period can help; a clinician or pharmacist can advise on the right timing and next steps. Don't start or stop prescribed medicines without checking pregnancy safety with a clinician.",
+      urgent: "Get urgent care for heavy bleeding (soaking pads rapidly), fainting, severe abdominal/pelvic pain, or pain/bleeding when pregnancy is possible. For pregnancy-specific advice, contact an obstetric clinician.",
+      source: KB.icmr_diet,
+    },
+    {
+      pattern: /eye pain|red eye|blurry vision|blurred vision|vision loss|ear pain|earache|toothache|tooth pain/,
+      title: "Eye, Ear & Dental Symptoms",
+      guidance: "Avoid putting unprescribed drops, oils, or objects into the eye or ear. For dental pain, arrange a dentist visit; temporary pain relief should follow the product label and your clinician's advice. The cause needs an examination.",
+      urgent: "Sudden vision loss, chemical exposure, a penetrating eye injury, severe eye pain, facial swelling with fever, or trouble swallowing/breathing needs urgent care.",
+      source: KB.aha_emergency,
+    },
+  ];
+  const symptomTopic = symptomTopics.find(topic => topic.pattern.test(lower));
+  if (symptomTopic) {
+    return {
+      category: symptomTopic.title,
+      answer: `### ${symptomTopic.title}\n\n${symptomTopic.guidance}\n\n**Get medical help:** ${symptomTopic.urgent}\n\nIf you share when this started, your age, how severe it is, and any other symptoms or relevant conditions/medicines, I can help you think through appropriate next steps. I can't diagnose or replace a clinician.`,
+      sources: [symptomTopic.source],
+      suggestedActions: [
+        { label: "Find a Doctor", action: "doctors", page: "find-doctors" },
+        { label: "Emergency Services", action: "emergency", page: "emergency" },
+      ],
+    };
+  }
+
   // Diet / nutrition
   if (/diet|food|eat|nutrition|weight|calories|what should i eat|healthy food|meal|vegetarian|vitamin/.test(lower)) {
     const hb = findBiomarker(reports, "hemoglobin");
@@ -788,7 +918,7 @@ ${conditions.some(c => /hypertension|bp/i.test(c)) ? "- ❤️ **Cardiologist** 
     };
   }
 
-  // ── 7. DYNAMIC FALLBACK — contextual, not generic ────────────────────────────
+  // ── 7. DYNAMIC FALLBACK — ask focused follow-ups instead of claiming coverage ─
   // Build a response that uses whatever patient data is available
   const hb = findBiomarker(reports, "hemoglobin");
   const hasData = bm.length > 0 || medications.length > 0;
@@ -796,21 +926,14 @@ ${conditions.some(c => /hypertension|bp/i.test(c)) ? "- ❤️ **Cardiologist** 
 
   return {
     category: "General Guidance",
-    answer: `### 🩺 I'm here to help, ${name}
+    answer: `### 🩺 Let's work through your question, ${name}
 
 ${hasData ? `Based on your health data:\n${hb ? `- Your hemoglobin is **${hb.value} ${hb.unit}** (${hb.status})\n` : ""}${medications.length > 0 ? `- You have ${medications.length} active medication${medications.length > 1 ? "s" : ""}` : ""}${conditionContext ? `\n- Known conditions: ${conditionContext}` : ""}\n` : ""}
-I can help you with:
+  I don't have enough information to give a reliable, specific answer to **“${q.slice(0, 180)}”** yet. I can help explain common health topics, symptoms, and your records, but I can't diagnose or safely recommend a treatment from limited details.
 
-- **"Explain my blood test results"** — I'll walk through every value
-- **"I have a fever of 102°F"** — specific treatment guidance
-- **"Is ibuprofen safe for me?"** — checks against your conditions and allergies
-- **"What foods should I eat?"** — diet plan based on your reports
-- **"Check my medications"** — review all prescriptions with stock status
-- **"I have a headache"** / **"my stomach hurts"** — symptom-specific advice
-- **"Give me my health summary"** — full overview of your health data
-- **"Book a doctor"** — help choosing the right specialist
+  For a more useful response, tell me: **who** this is about and their age, **what** the concern is, when it started, how severe it is, and any relevant conditions, allergies, or medicines. Don't include identifying details you don't need to share.
 
-The more specific your question, the more personalised my answer will be.`,
+  For severe symptoms such as trouble breathing, chest pain, stroke signs, heavy bleeding, or loss of consciousness, call **112 / 108** now.`,
     sources: [],
     suggestedActions: [
       { label: "My Health Summary", action: "prompt" },

@@ -6,6 +6,7 @@ import {
 import { useApp } from "../../context/AppContext";
 import { ChatMessage } from "../../types";
 import { processClinicalQuery } from "../../services/clinicalAiEngine";
+import { askOnlineClinicalAi } from "../../services/onlineClinicalAi";
 
 // ─── Inline bold/italic renderer ─────────────────────────────────────────────
 function renderInline(text: string): React.ReactNode {
@@ -153,6 +154,7 @@ Type any question below — symptoms, lab results, medications, diet, or when to
   const [messages, setMessages] = useState<ChatMessage[]>([buildWelcome()]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [onlineAiEnabled, setOnlineAiEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -175,13 +177,26 @@ Type any question below — symptoms, lab results, medications, diet, or when to
 
     // Run clinical engine with 600–1200ms delay (feels natural)
     const delay = 600 + Math.random() * 600;
-    setTimeout(() => {
+    window.setTimeout(() => {
+      void (async () => {
       try {
-        const result = processClinicalQuery(trimmed, {
+        let result = processClinicalQuery(trimmed, {
           profile: patientProfile,
           reports,
           medications,
         });
+
+        // Keep emergency triage local-first. The online model receives only the typed question.
+        if (onlineAiEnabled && !result.isEmergency) {
+          const onlineResult = await askOnlineClinicalAi(trimmed);
+          if (onlineResult?.provider === "Gemini") {
+            result = {
+              ...result,
+              answer: onlineResult.answer,
+              sources: onlineResult.retrieved_sources?.length ? onlineResult.retrieved_sources : result.sources,
+            };
+          }
+        }
 
         setMessages(prev => [...prev, {
           id: `b-${Date.now()}`,
@@ -200,8 +215,10 @@ Type any question below — symptoms, lab results, medications, diet, or when to
           sources: [],
           suggestedActions: [{ label: "Try again", action: "prompt" }],
         }]);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
+      })();
     }, delay);
   };
 
@@ -211,7 +228,8 @@ Type any question below — symptoms, lab results, medications, diet, or when to
     const navMap: Record<string, string> = {
       records: "records", pharmacy: "pharmacy", labs: "labs",
       "lab-tests": "labs", doctors: "find-doctors", appointments: "appointments",
-      profile: "profile", emergency: "emergency",
+      profile: "profile", emergency: "emergency", blood_bank: "blood-bank",
+      "blood-bank": "blood-bank",
     };
     if (navMap[action]) { setCurrentPage(navMap[action]); return; }
     // Send the button label as a conversational message
@@ -226,6 +244,7 @@ Type any question below — symptoms, lab results, medications, diet, or when to
       interaction_check: "Are my current medications safe to take together?",
       diet_sugar: "What should I eat to control my blood sugar?",
       symptom: "I want to do a symptom assessment",
+      blood_bank: "Show me urgent blood donation and requests nearby",
     };
     sendMessage(queryMap[action] || label || "Tell me more");
   };
@@ -365,7 +384,7 @@ Type any question below — symptoms, lab results, medications, diet, or when to
                   />
                 ))}
               </div>
-              <span className="text-xs text-gray-500">Analysing your health records...</span>
+              <span className="text-xs text-gray-500">{onlineAiEnabled ? "Reviewing your question..." : "Checking your health records..."}</span>
             </div>
           </div>
         )}
@@ -387,6 +406,19 @@ Type any question below — symptoms, lab results, medications, diet, or when to
               {prompt}
             </button>
           ))}
+        </div>
+
+        <div className="rounded-xl bg-blue-50 px-3 py-2 text-[10px] text-blue-900">
+          <label className="flex items-center gap-2 font-semibold">
+            <input
+              type="checkbox"
+              checked={onlineAiEnabled}
+              onChange={e => setOnlineAiEnabled(e.target.checked)}
+              className="accent-blue-600"
+            />
+            Use configured online AI (optional)
+          </label>
+          <p className="mt-1 pl-5">When enabled, only your typed question is sent to the configured AI service; your profile and reports are not sent. Avoid names or identifying details. If unavailable, the local assistant responds.</p>
         </div>
 
         {/* Input */}

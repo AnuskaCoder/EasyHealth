@@ -47,6 +47,7 @@ export const Navbar: React.FC = () => {
     { id: "find-doctors", label: "Find Doctors" },
     { id: "pharmacy", label: "Pharmacy" },
     { id: "labs", label: "Lab Checkups" },
+    { id: "blood-bank", label: "Urgent Blood" },
     { id: "records", label: "Medical Records" },
     { id: "appointments", label: "Appointments" },
     { id: "chatbot", label: "AI Assistant" },
@@ -92,13 +93,18 @@ export const Navbar: React.FC = () => {
               <button
                 key={link.id}
                 onClick={() => setCurrentPage(link.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all relative ${
                   currentPage === link.id
-                    ? "bg-blue-50 text-blue-700"
+                    ? link.id === "blood-bank" ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700"
+                    : link.id === "blood-bank"
+                    ? "text-rose-600 hover:text-rose-800 hover:bg-rose-50/60"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 }`}
               >
                 {link.label}
+                {link.id === "blood-bank" && (
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 ml-1 mb-0.5 animate-pulse" />
+                )}
               </button>
             ))}
           </nav>

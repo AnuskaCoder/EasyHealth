@@ -18,6 +18,7 @@ import {
   Shield,
   Video,
   UserCheck,
+  Droplet,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { doctors } from "../../data/doctors";
@@ -59,6 +60,7 @@ export const Dashboard: React.FC = () => {
     { id: "find-doctors", label: "Find Doctors", icon: Stethoscope, color: "bg-blue-600", page: "find-doctors" },
     { id: "labs", label: "Full Body Checkup", icon: FlaskConical, color: "bg-purple-600", page: "labs" },
     { id: "pharmacy", label: "Buy Medicines", icon: Pill, color: "bg-emerald-600", page: "pharmacy" },
+    { id: "blood-bank", label: "Urgent Blood", icon: Droplet, color: "bg-rose-600", page: "blood-bank" },
     { id: "symptom", label: "Symptom AI", icon: Heart, color: "bg-teal-600", action: () => setShowSymptomAssistant(true) },
     { id: "records", label: "Medical Records", icon: FileText, color: "bg-orange-500", page: "records" },
     { id: "ocr", label: "OCR Scan", icon: Scan, color: "bg-indigo-600", action: () => setShowOcrUpload(true) },
@@ -212,6 +214,37 @@ export const Dashboard: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Urgent Blood Network Banner */}
+      <div className="bg-gradient-to-r from-rose-50 to-red-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold shadow-xs flex-shrink-0">
+            <Droplet size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-black text-rose-900">
+                Urgent Blood Donation &amp; Bank Network
+              </p>
+              <span className="bg-red-100 text-red-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-full animate-pulse">
+                Live Feed
+              </span>
+            </div>
+            <p className="text-[11px] text-rose-700 mt-0.5">
+              4 critical blood requests nearby in Bangalore • Fast procurement &amp; verified on-call volunteer donors
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            onClick={() => setCurrentPage("blood-bank")}
+            className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1 active:scale-95"
+          >
+            <span>Urgent Blood Bank</span>
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      </div>
 
       {/* Quick Actions Grid */}
       <div>

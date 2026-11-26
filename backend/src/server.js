@@ -17,6 +17,7 @@ const labRoutes = require("./routes/labs");
 const emergencyRoutes = require("./routes/emergency");
 const recordRoutes = require("./routes/records");
 const consentRoutes = require("./routes/consent");
+const bloodBankRoutes = require("./routes/bloodBank");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -64,6 +65,7 @@ app.use("/api/labs", labRoutes);
 app.use("/api/emergency", emergencyRoutes);
 app.use("/api/records", recordRoutes);
 app.use("/api/consent", consentRoutes);
+app.use("/api/blood-bank", bloodBankRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use("*", (req, res) => {
