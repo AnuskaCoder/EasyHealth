@@ -1,13 +1,17 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Search, X, Star, Clock, MapPin, Video, Zap, CheckCircle, ChevronDown, ChevronUp, Globe, Filter } from "lucide-react";
-import { doctors, doctorCategories } from "../../data/doctors";
+import { doctors as localDoctors, doctorCategories } from "../../data/doctors";
 import { Doctor } from "../../types";
 import { useApp } from "../../context/AppContext";
+import { doctorApi, appointmentApi } from "../../services/api";
 
 const timeSlots = ["9:00 AM","9:30 AM","10:00 AM","10:30 AM","11:00 AM","11:30 AM","2:00 PM","2:30 PM","3:00 PM","3:30 PM","4:00 PM","4:30 PM"];
 
 const BookModal: React.FC<{ doctor: Doctor; mode: "video"|"in-person"|"emergency"; onClose: () => void; }> = ({ doctor, mode, onClose }) => {
   const { addAppointment } = useApp();
+  const submitBooking = async (name: string, phone: string, slot: string, symptoms: string) => {
+    // This is handled by the inline confirm() above
+  };
   const [slot, setSlot] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -20,10 +24,27 @@ const BookModal: React.FC<{ doctor: Doctor; mode: "video"|"in-person"|"emergency
   const confirm = () => {
     if (!name || !phone || (!slot && mode !== "emergency")) return;
     setLoading(true);
-    setTimeout(() => {
-      addAppointment({ id: refId, doctorId: doctor.id, doctorName: doctor.name, doctorSpecialty: doctor.specialty, doctorImage: doctor.image, patientId: "p1", date: new Date().toISOString().split("T")[0], time: slot || "Now", mode, status: mode === "emergency" ? "ongoing" : "upcoming", hospital: doctor.hospital, fee, symptoms });
+    setTimeout(async () => {
+      // Try backend API first, fall back to context
+      const result = await appointmentApi.create({
+        doctorId: doctor.id, doctorName: doctor.name,
+        doctorSpecialty: doctor.specialty, doctorImage: doctor.image,
+        date: new Date().toISOString().split("T")[0],
+        time: slot || "Now", mode, hospital: doctor.hospital, fee, symptoms,
+      }).catch(() => ({ data: null, error: "offline" }));
+
+      addAppointment({
+        id: result.data?.data?.id || refId,
+        doctorId: doctor.id, doctorName: doctor.name,
+        doctorSpecialty: doctor.specialty, doctorImage: doctor.image,
+        patientId: "p1",
+        date: new Date().toISOString().split("T")[0],
+        time: slot || "Now", mode,
+        status: mode === "emergency" ? "ongoing" : "upcoming",
+        hospital: doctor.hospital, fee, symptoms,
+      });
       setLoading(false); setDone(true);
-    }, 1500);
+    }, 800);
   };
 
   return (
@@ -159,6 +180,14 @@ export const FindDoctors: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [availableOnly, setAvailableOnly] = useState(false);
   const [onlineOnly, setOnlineOnly] = useState(false);
+  // Load from backend if available, fall back to local data
+  const [doctors, setDoctors] = useState<Doctor[]>(localDoctors);
+
+  useEffect(() => {
+    doctorApi.getAll().then(result => {
+      if (result.data?.data?.length) setDoctors(result.data.data);
+    }).catch(() => {/* use local data */});
+  }, []);
 
   const filtered = useMemo(() => doctors.filter((d) => {
     const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.specialty.toLowerCase().includes(search.toLowerCase()) || d.hospital.toLowerCase().includes(search.toLowerCase());

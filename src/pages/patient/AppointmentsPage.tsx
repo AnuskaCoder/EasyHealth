@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Calendar,
   Clock,
@@ -14,15 +14,18 @@ import {
   PhoneCall,
   Check,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { Appointment } from "../../types";
 import { doctors } from "../../data/doctors";
+import { appointmentApi } from "../../services/api";
 
 export const AppointmentsPage: React.FC = () => {
   const {
     appointments,
     updateAppointmentStatus,
+    addAppointment,
     startTeleconsult,
     medications,
     toggleMedicationTaken,
@@ -31,8 +34,35 @@ export const AppointmentsPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<"appointments" | "medications">("appointments");
   const [appointmentFilter, setAppointmentFilter] = useState<string>("all");
+  const [syncing, setSyncing] = useState(false);
+  const [backendAppts, setBackendAppts] = useState<Appointment[] | null>(null);
 
-  const filteredAppointments = appointments.filter((a) => {
+  // Try to load appointments from backend on mount
+  useEffect(() => {
+    appointmentApi.getAll().then(result => {
+      if (result.data?.data?.length) {
+        setBackendAppts(result.data.data);
+      }
+    }).catch(() => {/* backend offline — use context */});
+  }, []);
+
+  // Use backend data if available, else fall back to context
+  const allAppointments = backendAppts || appointments;
+
+  const handleCancelAppointment = async (apptId: string) => {
+    // Try backend first
+    const result = await appointmentApi.cancel(apptId, "Cancelled by patient");
+    if (!result.error) {
+      setSyncing(true);
+      const refreshed = await appointmentApi.getAll();
+      if (refreshed.data?.data) setBackendAppts(refreshed.data.data);
+      setSyncing(false);
+    }
+    // Always update local context too
+    updateAppointmentStatus(apptId, "cancelled");
+  };
+
+  const filteredAppointments = allAppointments.filter((a) => {
     if (appointmentFilter === "all") return true;
     return a.status === appointmentFilter;
   });
@@ -60,6 +90,7 @@ export const AppointmentsPage: React.FC = () => {
           </h1>
           <p className="text-xs text-blue-100 mt-1 max-w-xl">
             Track your doctor appointments, join live video consultations, and maintain your daily prescription adherence checklist.
+            {backendAppts && <span className="ml-1 opacity-70">(synced with backend)</span>}
           </p>
         </div>
 
@@ -190,10 +221,7 @@ export const AppointmentsPage: React.FC = () => {
 
                     {appt.status === "upcoming" && (
                       <button
-                        onClick={() => {
-                          updateAppointmentStatus(appt.id, "cancelled");
-                          alert("Appointment cancelled.");
-                        }}
+                        onClick={() => handleCancelAppointment(appt.id)}
                         className="px-3 py-2 border border-gray-300 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100"
                       >
                         Cancel

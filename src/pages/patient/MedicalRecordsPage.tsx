@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FileText, Upload, Scan, Sparkles, Search, Download,
   ShieldCheck, Calendar, Tag, Plus, Trash2, FilePlus,
@@ -8,6 +8,7 @@ import {
 import { useApp } from "../../context/AppContext";
 import { MedicalReport, ReportType } from "../../types";
 import { AddMedicalRecordModal } from "../../components/records/AddMedicalRecordModal";
+import { recordApi } from "../../services/api";
 
 // ─── Report type icon map ─────────────────────────────────────────────────────
 const REPORT_ICONS: Record<string, string> = {
@@ -276,14 +277,25 @@ export const MedicalRecordsPage: React.FC = () => {
   const [showFullModal, setShowFullModal] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
 
-  // Delete a report from state
+  // Try loading records from backend; fall back to context
   const [localReports, setLocalReports] = useState<MedicalReport[]>(reports);
-  // Keep in sync with context
-  React.useEffect(() => { setLocalReports(reports); }, [reports]);
 
-  const deleteReport = (id: string) => {
-    // We don't have a deleteReport in context, so we track deletions locally
-    // The add/update functions are from context — deletions stay local per session
+  useEffect(() => {
+    recordApi.getAll().then(result => {
+      if (result.data?.data?.length) {
+        setLocalReports(result.data.data);
+      } else {
+        setLocalReports(reports);
+      }
+    }).catch(() => setLocalReports(reports));
+  }, [reports]);
+
+  // Keep in sync with context when new reports are added locally
+  useEffect(() => { setLocalReports(reports); }, [reports]);
+
+  const deleteReport = async (id: string) => {
+    // Try backend delete first
+    await recordApi.delete(id).catch(() => {});
     setLocalReports(prev => prev.filter(r => r.id !== id));
   };
 
