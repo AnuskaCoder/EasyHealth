@@ -1,46 +1,31 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "easyhealth-jwt-secret-key-2026-supersecure";
+const JWT_SECRET = process.env.JWT_SECRET || "easyhealth-dev-secret-2024";
 
-/**
- * Verify JWT Token Middleware
- */
-function authenticateToken(req, res, next) {
+const authenticate = (req, res, next) => {
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ error: "Access Denied: No Token Provided" });
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ success: false, error: "No token provided. Authorization header missing.", code: 401 });
   }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: "Invalid or Expired Token" });
-    }
-    req.user = user;
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
-  });
-}
-
-/**
- * Role-Based Access Control (RBAC) Middleware
- * @param {string[]} allowedRoles - Array of allowed roles: 'patient', 'doctor', 'admin'
- */
-function authorizeRoles(...allowedRoles) {
-  return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({
-        error: `Access Forbidden: Required role '${allowedRoles.join(" or ")}', your role is '${
-          req.user ? req.user.role : "unauthenticated"
-        }'`,
-      });
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ success: false, error: "Session expired. Please log in again.", code: 401 });
     }
-    next();
-  };
-}
-
-module.exports = {
-  authenticateToken,
-  authorizeRoles,
-  JWT_SECRET,
+    return res.status(403).json({ success: false, error: "Invalid or tampered token.", code: 403 });
+  }
 };
+
+const requireRole = (...roles) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ success: false, error: "Not authenticated", code: 401 });
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({ success: false, error: `Access denied. Required role: ${roles.join(" or ")}`, code: 403 });
+  }
+  next();
+};
+
+module.exports = { authenticate, requireRole };

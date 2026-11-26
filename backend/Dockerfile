@@ -1,11 +1,8 @@
-# Production Dockerfile for Node.js Express Backend
 FROM node:18-alpine
-
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
-
-COPY . .
-
+COPY src/ ./src/
 EXPOSE 5000
+USER node
 CMD ["node", "src/server.js"]

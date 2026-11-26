@@ -1,66 +1,67 @@
 const express = require("express");
-const { authenticateToken, authorizeRoles } = require("../middleware/auth");
-
+const { authenticate, requireRole } = require("../middleware/auth");
+const { db } = require("../config/database");
 const router = express.Router();
 
-let prescriptionsDb = [
-  {
-    id: "RX-9082",
-    appointmentId: "APT-849102",
-    patientId: "p1",
-    patientName: "Ananya Krishnan",
-    doctorId: "d1",
-    doctorName: "Dr. Priya Sharma",
-    doctorSpecialty: "Cardiologist",
-    date: "2026-11-18",
-    diagnosis: "Borderline Microcytic Anemia & Sinus Tachycardia on exertion",
-    vitals: { bp: "118/76", pulse: "78 bpm", temp: "98.4 F", weight: "58 kg" },
-    medications: [
-      { name: "Ferrous Sulphate 200mg", dosage: "200mg", frequency: "Twice daily", duration: "30 days", timing: "After Food" },
-      { name: "Vitamin C 500mg (Limcee)", dosage: "500mg", frequency: "Once daily", duration: "30 days", timing: "After Food" },
-    ],
-    notes: "Patient advised to maintain hydration and avoid high-intensity cardio until hemoglobin normalizes. Follow-up in 4 weeks with fresh CBC.",
-    nextFollowUp: "2026-12-18",
-  },
-];
+const prescriptions = [];
 
-/**
- * GET /api/prescriptions
- */
-router.get("/", (req, res) => {
-  const { patientId, doctorId } = req.query;
-  let list = [...prescriptionsDb];
-  if (patientId) list = list.filter((p) => p.patientId === patientId);
-  if (doctorId) list = list.filter((p) => p.doctorId === doctorId);
-  res.json({ count: list.length, prescriptions: list });
+// GET /api/prescriptions
+router.get("/", authenticate, (req, res) => {
+  let rxs = prescriptions;
+  if (req.user.role === "patient") rxs = prescriptions.filter(p => p.patientId === req.user.id);
+  else if (req.user.role === "doctor") rxs = prescriptions.filter(p => p.doctorId === req.user.id);
+  res.json({ success: true, data: rxs, count: rxs.length });
 });
 
-/**
- * POST /api/prescriptions
- * Doctor issues & signs digital prescription
- */
-router.post("/", (req, res) => {
-  const { appointmentId, patientName, diagnosis, vitals, medications, notes, nextFollowUp } = req.body;
-
-  const newRx = {
-    id: `RX-${Math.floor(1000 + Math.random() * 9000)}`,
-    appointmentId: appointmentId || "APT-GEN",
-    patientId: "p1",
-    patientName: patientName || "Ananya Krishnan",
-    doctorId: "d1",
-    doctorName: "Dr. Priya Sharma",
-    doctorSpecialty: "Cardiologist",
+// POST /api/prescriptions  (doctor uploads prescription)
+router.post("/", authenticate, requireRole("doctor"), (req, res) => {
+  const { patientId, appointmentId, diagnosis, medications, notes, vitals, nextFollowUp } = req.body;
+  if (!patientId || !diagnosis || !medications?.length) {
+    return res.status(422).json({ success: false, error: "patientId, diagnosis, and medications are required" });
+  }
+  const doctor = db.doctors.find(d => d.userId === req.user.id) || db.doctors[0];
+  const rx = {
+    id: `RX-${Math.floor(10000 + Math.random() * 90000)}`,
+    appointmentId: appointmentId || null,
+    patientId,
+    doctorId: req.user.id,
+    doctorName: req.user.name,
+    doctorSpecialty: doctor?.specialty || "",
     date: new Date().toISOString().split("T")[0],
-    diagnosis: diagnosis || "Clinical consultation",
-    vitals: vitals || { bp: "120/80", pulse: "72 bpm" },
-    medications: medications || [],
-    notes: notes || "Take medications as advised.",
-    nextFollowUp: nextFollowUp || "In 4 weeks",
-    signedAt: new Date().toISOString(),
+    diagnosis,
+    medications,
+    notes: notes || null,
+    vitals: vitals || null,
+    nextFollowUp: nextFollowUp || null,
+    createdAt: new Date().toISOString(),
   };
+  prescriptions.push(rx);
 
-  prescriptionsDb.unshift(newRx);
-  res.status(201).json({ message: "Prescription successfully issued and signed", prescription: newRx });
+  // Auto-add medications to patient's medication list
+  medications.forEach(med => {
+    db.medications.push({
+      id: `MED-RX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      patientId,
+      name: med.name,
+      dosage: med.dosage || "",
+      frequency: med.frequency || "",
+      startDate: new Date().toISOString().split("T")[0],
+      prescribedBy: req.user.name,
+      times: ["9:00 AM"],
+      stock: 30,
+      instructions: `${med.timing || "With food"} — ${med.duration || "As directed"}`,
+      isActive: true,
+    });
+  });
+
+  res.status(201).json({ success: true, data: rx, message: "Prescription created and synced to patient" });
+});
+
+// GET /api/prescriptions/:id
+router.get("/:id", authenticate, (req, res) => {
+  const rx = prescriptions.find(p => p.id === req.params.id);
+  if (!rx) return res.status(404).json({ success: false, error: "Prescription not found" });
+  res.json({ success: true, data: rx });
 });
 
 module.exports = router;

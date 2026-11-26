@@ -37,3 +37,5 @@ dev-server.log
 ajv*.log
 npm-out.log
 npm-install*.log
+
+.vercel

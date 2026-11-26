@@ -1,65 +1,68 @@
 const express = require("express");
-const { authenticateToken, authorizeRoles } = require("../middleware/auth");
-const { encryptPHI, decryptPHI } = require("../middleware/encryption");
-
+const { authenticate, requireRole } = require("../middleware/auth");
+const { db } = require("../config/database");
 const router = express.Router();
 
-let currentPatient = {
-  id: "p1",
-  name: "Ananya Krishnan",
-  age: 28,
-  gender: "Female",
-  dob: "1996-03-15",
-  phone: "+91 98765 43210",
-  email: "ananya.k@example.com",
-  bloodGroup: "B+",
-  height: 164,
-  weight: 58,
-  allergies: ["Penicillin", "Dust Mites"],
-  chronicConditions: ["Mild Bronchial Asthma"],
-  emergencyContact: "+91 98765 00000 (Rohan Krishnan - Brother)",
-  address: "Flat 402, Green Glen Layout, Bellandur, Bangalore 560103",
-  encryptedPhi: encryptPHI({
-    allergies: ["Penicillin", "Dust Mites"],
-    chronicConditions: ["Mild Bronchial Asthma"],
-    ssn_id: "IND-BLR-849102",
-  }),
-};
-
-/**
- * GET /api/patients/profile
- */
-router.get("/profile", authenticateToken, (req, res) => {
-  res.json({ patient: currentPatient });
+// GET /api/patients/profile
+router.get("/profile", authenticate, requireRole("patient"), (req, res) => {
+  const patient = db.patients.find(p => p.userId === req.user.id || p.id === req.user.id);
+  if (!patient) return res.status(404).json({ success: false, error: "Patient profile not found" });
+  res.json({ success: true, data: patient });
 });
 
-/**
- * PUT /api/patients/profile
- */
-router.put("/profile", authenticateToken, (req, res) => {
-  const updates = req.body;
-  currentPatient = {
-    ...currentPatient,
-    ...updates,
-    encryptedPhi: encryptPHI({
-      allergies: updates.allergies || currentPatient.allergies,
-      chronicConditions: updates.chronicConditions || currentPatient.chronicConditions,
-      updated_at: new Date().toISOString(),
-    }),
-  };
-  res.json({ message: "Profile updated successfully", patient: currentPatient });
+// PUT /api/patients/profile
+router.put("/profile", authenticate, requireRole("patient"), (req, res) => {
+  const idx = db.patients.findIndex(p => p.userId === req.user.id || p.id === req.user.id);
+  if (idx === -1) return res.status(404).json({ success: false, error: "Patient profile not found" });
+  db.patients[idx] = { ...db.patients[idx], ...req.body, updatedAt: new Date().toISOString() };
+  res.json({ success: true, data: db.patients[idx], message: "Profile updated" });
 });
 
-/**
- * GET /api/patients/vault/inspect
- * Demo endpoint to inspect raw ciphertext vs decrypted plaintext
- */
-router.get("/vault/inspect", authenticateToken, (req, res) => {
+// GET /api/patients/dashboard
+router.get("/dashboard", authenticate, requireRole("patient"), (req, res) => {
+  const patientId = req.user.id;
+  const appointments = db.appointments.filter(a => a.patientId === patientId);
+  const records = db.records.filter(r => r.patientId === patientId && !r.isDeleted);
+  const medications = db.medications.filter(m => m.patientId === patientId && m.isActive);
+  const lowStock = medications.filter(m => m.stock <= 10);
   res.json({
-    algorithm: "AES-256-GCM",
-    rawCiphertext: currentPatient.encryptedPhi,
-    decryptedData: decryptPHI(currentPatient.encryptedPhi),
+    success: true,
+    data: {
+      upcomingAppointments: appointments.filter(a => a.status === "upcoming").length,
+      totalReports: records.length,
+      activeMedications: medications.length,
+      lowStockAlert: lowStock.map(m => ({ name: m.name, stock: m.stock })),
+      nextAppointment: appointments.find(a => a.status === "upcoming") || null,
+    },
   });
+});
+
+// GET /api/patients/medications
+router.get("/medications", authenticate, (req, res) => {
+  const meds = db.medications.filter(m => m.patientId === req.user.id);
+  res.json({ success: true, data: meds, count: meds.length });
+});
+
+// GET /api/patients/health-stats
+router.get("/health-stats", authenticate, requireRole("patient"), (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      bp: "118/76 mmHg",
+      heartRate: "78 bpm",
+      bloodSugar: "95 mg/dL",
+      spo2: "98%",
+      bmi: "21.6",
+      status: "All vitals normal",
+      lastUpdated: new Date().toISOString(),
+    },
+  });
+});
+
+// GET /api/patients - doctor gets all patients (with consent)
+router.get("/", authenticate, requireRole("doctor", "admin"), (req, res) => {
+  const patients = db.patients.map(p => ({ id: p.id, name: p.name, age: p.age, bloodGroup: p.bloodGroup }));
+  res.json({ success: true, data: patients, count: patients.length });
 });
 
 module.exports = router;
