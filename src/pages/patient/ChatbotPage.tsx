@@ -78,27 +78,31 @@ function renderMarkdown(content: string) {
 }
 
 // ─── Dynamic quick prompts based on patient data ──────────────────────────────
-function buildQuickPrompts(profile: any, medications: any[]): string[] {
+function buildQuickPrompts(profile: any, medications: any[], reports: any[] = []): string[] {
   const prompts: string[] = ["Give me my health summary"];
+
+  if (reports.length > 0) prompts.push("Explain my latest blood test results");
 
   if (profile?.chronicConditions?.some((c: string) => /asthma/i.test(c))) {
     prompts.push("How am I managing my asthma?");
   }
+  if (profile?.chronicConditions?.some((c: string) => /diabetes/i.test(c))) {
+    prompts.push("How is my blood sugar control?");
+  }
   if (profile?.allergies?.some((a: string) => /penicillin/i.test(a))) {
     prompts.push("Is amoxicillin safe for me?");
   }
-  const lowStock = medications.find(m => m.stock <= 10);
-  if (lowStock) prompts.push(`I'm low on ${lowStock.name} — what should I do?`);
+  const lowStock = medications.find((m: any) => m.stock <= 10);
+  if (lowStock) prompts.push(`I'm running low on ${lowStock.name}`);
 
   prompts.push(
-    "I have a fever of 102°F — what should I take?",
-    "Explain my latest blood test results",
-    "What foods improve my hemoglobin?",
-    "Check if my medications interact",
-    "I have a headache — what should I do?",
-    "How is my cholesterol?"
+    "I have a fever of 102°F — what should I do?",
+    "What foods should I eat for my health?",
+    "I have a headache — what helps?",
+    "Check if my medications are safe together",
+    "I have stomach pain and acidity"
   );
-  return prompts.slice(0, 6);
+  return [...new Set(prompts)].slice(0, 6);
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -139,7 +143,7 @@ Type any question below — symptoms, lab results, medications, diet, or when to
         authority: "Patient EHR Integration",
         quote: `Profile: ${patientProfile?.name || "Guest"}, ${patientProfile?.age || "—"} yrs, Blood Group ${patientProfile?.bloodGroup || "—"}.`,
       }],
-      suggestedActions: buildQuickPrompts(patientProfile, medications).slice(0, 4).map(p => ({
+      suggestedActions: buildQuickPrompts(patientProfile, medications, reports).slice(0, 4).map(p => ({
         label: p, action: "prompt", page: undefined,
       })),
     };
@@ -210,11 +214,23 @@ Type any question below — symptoms, lab results, medications, diet, or when to
       profile: "profile", emergency: "emergency",
     };
     if (navMap[action]) { setCurrentPage(navMap[action]); return; }
-    // Send the button label as a message
-    if (label) sendMessage(label);
+    // Send the button label as a conversational message
+    if (label && label !== action) {
+      sendMessage(label);
+      return;
+    }
+    // Map action codes to natural language queries
+    const queryMap: Record<string, string> = {
+      health_summary: "Give me my health summary",
+      prompt: label || "Tell me more about my health",
+      interaction_check: "Are my current medications safe to take together?",
+      diet_sugar: "What should I eat to control my blood sugar?",
+      symptom: "I want to do a symptom assessment",
+    };
+    sendMessage(queryMap[action] || label || "Tell me more");
   };
 
-  const quickPrompts = buildQuickPrompts(patientProfile, medications);
+  const quickPrompts = buildQuickPrompts(patientProfile, medications, reports);
 
   return (
     <div className="flex flex-col h-[calc(100vh-125px)] bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">

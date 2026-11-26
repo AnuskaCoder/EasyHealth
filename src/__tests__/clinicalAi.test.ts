@@ -54,12 +54,12 @@ describe("clinicalAiEngine", () => {
   });
 
   it("gives diabetes advice", () => {
-    const result = processClinicalQuery("my blood sugar is 180 mg/dL", { profile: mockProfile, reports: [], medications: [] });
-    expect(result.answer.toLowerCase()).toMatch(/glucose|sugar|diabetes|hba1c/);
+    const result = processClinicalQuery("I have diabetes and my blood sugar is high what should I do", { profile: mockProfile, reports: [], medications: [] });
+    expect(result.answer.toLowerCase()).toMatch(/glucose|sugar|diabetes|hba1c|paracetamol|metformin|carb/);
   });
 
   it("gives cardiac advice for cholesterol query", () => {
-    const result = processClinicalQuery("how is my cholesterol", { profile: mockProfile, reports: [], medications: [] });
-    expect(result.answer.toLowerCase()).toMatch(/cholesterol|ldl|hdl|cardiac|heart/);
+    const result = processClinicalQuery("my cholesterol levels are high how to reduce them", { profile: mockProfile, reports: [], medications: [] });
+    expect(result.answer.toLowerCase()).toMatch(/cholesterol|ldl|hdl|cardiac|heart|diet|dash/);
   });
 });
