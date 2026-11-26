@@ -1,4 +1,4 @@
-const { db } = require("../config/database");
+const { mem: db } = require("../config/database");
 
 const MEDICINES_CATALOG = [
   { id: "m1", name: "Paracetamol 500mg", brand: "Crocin", category: "Pain Relief", price: 25, mrp: 32, discountPercent: 22, unit: "Strip of 10", stock: 500, prescription: false, description: "Effective for fever and mild to moderate pain." },
@@ -122,3 +122,4 @@ function getOrderById(req, res, next) {
 }
 
 module.exports = { getMedicines, placeOrder, getOrders, getOrderById };
+

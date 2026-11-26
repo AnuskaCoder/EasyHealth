@@ -1,6 +1,6 @@
 const express = require("express");
 const { authenticate } = require("../middleware/auth");
-const { db } = require("../config/database");
+const { mem } = require("../config/database");
 const router = express.Router();
 
 const medicines = [
@@ -31,37 +31,63 @@ router.get("/categories", (req, res) => {
   res.json({ success: true, data: cats });
 });
 
-// POST /api/pharmacy/order
+// POST /api/pharmacy/order — recalculate prices server-side, never trust client totals
 router.post("/order", authenticate, (req, res) => {
-  const { items, subtotal, discount, total, address } = req.body;
+  const { items, address, couponCode } = req.body;
   if (!items?.length || !address) {
     return res.status(422).json({ success: false, error: "items and address are required" });
   }
+
+  // Recalculate all prices on the server
+  let subtotal = 0;
+  const validatedItems = items.map(item => {
+    const med = medicines.find(m => m.id === item.id || m.id === item.medicine?.id);
+    if (!med) throw new Error(`Medicine not found: ${item.id}`);
+    if (!med.stock) throw new Error(`${med.name} is out of stock`);
+    const qty = Math.max(1, Math.floor(item.quantity || 1));
+    const lineTotal = med.finalPrice * qty;
+    subtotal += lineTotal;
+    return { medicine: med, quantity: qty, lineTotal };
+  });
+
+  // Server-side coupon validation
+  let discount = 0;
+  const validCoupons = { "HEALTH10": 0.10, "SAVE15": 0.15, "FIRST20": 0.20 };
+  if (couponCode && validCoupons[couponCode.toUpperCase()]) {
+    discount = subtotal * validCoupons[couponCode.toUpperCase()];
+  }
+  const total = Math.max(0, subtotal - discount);
+
   const order = {
     id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
     patientId: req.user.id,
-    items, subtotal: subtotal || 0,
-    discount: discount || 0,
-    total: total || 0,
+    items: validatedItems,
+    subtotal: Math.round(subtotal * 100) / 100,
+    discount: Math.round(discount * 100) / 100,
+    total: Math.round(total * 100) / 100,
     address,
+    couponApplied: couponCode || null,
     status: "Processing",
     estimatedDelivery: "Today by 6:00 PM",
     createdAt: new Date().toISOString(),
   };
-  db.orders.push(order);
+  mem.orders.push(order);
   res.status(201).json({ success: true, data: order, message: `Order #${order.id} placed. Estimated delivery: Today by 6:00 PM` });
 });
 
 // GET /api/pharmacy/orders
 router.get("/orders", authenticate, (req, res) => {
-  const orders = db.orders.filter(o => o.patientId === req.user.id);
+  const orders = mem.orders.filter(o => o.patientId === req.user.id);
   res.json({ success: true, data: orders, count: orders.length });
 });
 
-// GET /api/pharmacy/orders/:id
+// GET /api/pharmacy/orders/:id — ownership enforced
 router.get("/orders/:id", authenticate, (req, res) => {
-  const order = db.orders.find(o => o.id === req.params.id && o.patientId === req.user.id);
+  const order = mem.orders.find(o => o.id === req.params.id);
   if (!order) return res.status(404).json({ success: false, error: "Order not found" });
+  if (order.patientId !== req.user.id && req.user.role !== "admin") {
+    return res.status(403).json({ success: false, error: "You do not have permission to view this order" });
+  }
   res.json({ success: true, data: order });
 });
 

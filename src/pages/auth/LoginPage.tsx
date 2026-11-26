@@ -2,13 +2,15 @@ import React, { useState } from "react";
 import {
   Zap, Eye, EyeOff, User, Stethoscope, Mail, Lock,
   Phone, ArrowRight, CheckCircle, AlertCircle, Sparkles,
-  Shield, Activity, Heart, Pill, FlaskConical,
+  Shield, Activity, Heart, Pill, FlaskConical, Server,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import {
-  loginAccount, registerAccount, seedDemoAccounts,
-  saveSession, accountExists,
+  loginWithBackend, registerWithBackend,
+  loginDemo, registerDemo, seedDemoAccounts, accountExists,
+  saveSession,
 } from "../../services/authStorage";
+import { checkBackendHealth } from "../../services/api";
 import { PatientProfile, Doctor, DoctorCategory } from "../../types";
 
 type AuthMode = "login" | "signup";
@@ -25,6 +27,12 @@ export const LoginPage: React.FC = () => {
   const [mode, setMode] = useState<AuthMode>("login");
   const [step, setStep] = useState<SignupStep>("role");
   const [role, setRole] = useState<"patient" | "doctor">("patient");
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+
+  // Check backend health on mount
+  React.useEffect(() => {
+    checkBackendHealth().then(ok => setBackendOnline(ok));
+  }, []);
 
   // Shared credential fields
   const [email, setEmail] = useState("");
@@ -67,17 +75,23 @@ export const LoginPage: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(""); setLoading(true);
-    setTimeout(() => {
-      try {
-        const account = loginAccount(email, password);
-        saveSession({ role: account.role, userId: account.id, name: account.name, email: account.email, rememberMe, loginTime: Date.now() });
+    try {
+      if (backendOnline) {
+        // PRIMARY PATH: backend API with bcrypt auth
+        const { session, profileData } = await loginWithBackend(email, password, rememberMe);
+        if (session.role === "patient") registerPatient(profileData);
+        else registerDoctor(profileData);
+      } else {
+        // FALLBACK: demo localStorage auth (portfolio demo only)
+        const account = loginDemo(email, password);
+        saveSession({ role: account.role, userId: account.id, name: account.name, email: account.email, rememberMe, loginTime: Date.now(), source: "demo" });
         if (account.role === "patient") registerPatient(account.profileData);
         else registerDoctor(account.profileData);
-      } catch (err: any) {
-        setError(err.message);
       }
-      setLoading(false);
-    }, 600);
+    } catch (err: any) {
+      setError(err.message);
+    }
+    setLoading(false);
   };
 
   const handleSignupCredentials = (e: React.FormEvent) => {
@@ -86,31 +100,37 @@ export const LoginPage: React.FC = () => {
     if (!email.includes("@")) { setError("Please enter a valid email address."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
-    if (accountExists(email)) { setError("An account with this email already exists. Please log in."); return; }
+    // Only check local duplicates in demo mode — backend checks its own
+    if (!backendOnline && accountExists(email)) { setError("An account with this email already exists. Please log in."); return; }
     setStep("profile");
   };
 
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(""); setLoading(true);
-    setTimeout(() => {
-      try {
-        const profileName = role === "patient" ? name.trim() : (name.startsWith("Dr.") ? name.trim() : `Dr. ${name.trim()}`);
-        if (!profileName || profileName === "Dr.") { setError("Please enter your name."); setLoading(false); return; }
+    try {
+      const profileName = role === "patient" ? name.trim() : (name.startsWith("Dr.") ? name.trim() : `Dr. ${name.trim()}`);
+      if (!profileName || profileName === "Dr.") { setError("Please enter your name."); setLoading(false); return; }
 
-        const profileData: PatientProfile | Doctor = role === "patient"
-          ? { id: `p-${Date.now()}`, name: profileName, age: Number(age) || 25, gender, dob, phone, email, bloodGroup, height: Number(height) || 164, weight: Number(weight) || 60, allergies: allergies.length ? allergies : ["None"], chronicConditions: conditions.length ? conditions : ["None"], emergencyContact: emergencyContact || "Not provided", address: address || "India", pastSurgeries: [], vaccinations: [] }
-          : { id: `d-${Date.now()}`, name: profileName, specialty, qualifications: qualifications.split(",").map(q => q.trim()), experience: Number(experience) || 5, hospital: hospital || "City Hospital", hospitalId: "h1", rating: 4.5, reviewCount: 0, consultFee: Number(consultFee) || 800, emergencyFee: Number(emergencyFee) || 2000, availableToday: true, nextSlot: "9:00 AM", languages: languages.split(",").map(l => l.trim()), about: about || `${specialty} with ${experience} years of experience.`, image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=300&q=80", verified: true, online: true, patientsCount: 0, successRate: 95 };
+      const profileData: PatientProfile | Doctor = role === "patient"
+        ? { id: `p-${Date.now()}`, name: profileName, age: Number(age) || 25, gender, dob, phone, email, bloodGroup, height: Number(height) || 164, weight: Number(weight) || 60, allergies: allergies.length ? allergies : [], chronicConditions: conditions.filter(c => c !== "None"), emergencyContact: emergencyContact || "Not provided", address: address || "India", pastSurgeries: [], vaccinations: [] }
+        : { id: `d-${Date.now()}`, name: profileName, specialty, qualifications: qualifications.split(",").map(q => q.trim()), experience: Number(experience) || 5, hospital: hospital || "City Hospital", hospitalId: "h1", rating: 4.5, reviewCount: 0, consultFee: Number(consultFee) || 800, emergencyFee: Number(emergencyFee) || 2000, availableToday: true, nextSlot: "9:00 AM", languages: languages.split(",").map(l => l.trim()), about: about || `${specialty} with ${Number(experience) || 5} years of experience.`, image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=300&q=80", verified: false, online: true, patientsCount: 0, successRate: 95 };
 
-        const account = registerAccount(role, profileName, email, phone, password, profileData);
-        saveSession({ role, userId: account.id, name: profileName, email, rememberMe, loginTime: Date.now() });
-        if (role === "patient") registerPatient(profileData as PatientProfile);
-        else registerDoctor(profileData as Doctor);
-      } catch (err: any) {
-        setError(err.message);
+      if (backendOnline) {
+        // PRIMARY PATH: register on backend (bcrypt hashed)
+        await registerWithBackend(role, profileName, email, phone, password, profileData, rememberMe);
+      } else {
+        // FALLBACK: demo mode
+        const account = registerDemo(role, profileName, email, phone, profileData);
+        saveSession({ role, userId: account.id, name: profileName, email, rememberMe, loginTime: Date.now(), source: "demo" });
       }
-      setLoading(false);
-    }, 700);
+
+      if (role === "patient") registerPatient(profileData as PatientProfile);
+      else registerDoctor(profileData as Doctor);
+    } catch (err: any) {
+      setError(err.message);
+    }
+    setLoading(false);
   };
 
   const toggleAllergy = (a: string) => setAllergies(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
@@ -201,6 +221,12 @@ export const LoginPage: React.FC = () => {
                 <div className="text-center">
                   <h1 className="text-2xl font-black text-gray-900">Welcome back 👋</h1>
                   <p className="text-gray-500 text-sm mt-1">Sign in to your EasyHealth account</p>
+                  {backendOnline !== null && (
+                    <div className={`inline-flex items-center gap-1.5 mt-2 text-xs px-2.5 py-1 rounded-full font-semibold ${backendOnline ? "bg-green-50 text-green-700 border border-green-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                      <Server size={11} />
+                      {backendOnline ? "Backend connected — secure bcrypt auth" : "Demo mode — backend offline"}
+                    </div>
+                  )}
                 </div>
 
                 {/* Role selector */}

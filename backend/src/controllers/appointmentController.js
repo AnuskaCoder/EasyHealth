@@ -1,4 +1,4 @@
-const { db } = require("../config/database");
+const { mem: db } = require("../config/database");
 
 function generateApptId() {
   return `APT-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -154,3 +154,4 @@ function reschedule(req, res, next) {
 }
 
 module.exports = { create, getAll, getById, updateStatus, cancel, reschedule };
+

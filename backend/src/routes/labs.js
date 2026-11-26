@@ -1,6 +1,6 @@
 const express = require("express");
 const { authenticate } = require("../middleware/auth");
-const { db } = require("../config/database");
+const { mem } = require("../config/database");
 const router = express.Router();
 
 const labTests = [
@@ -32,7 +32,7 @@ router.get("/categories", (req, res) => {
 
 // GET /api/labs/bookings
 router.get("/bookings", authenticate, (req, res) => {
-  const bookings = db.labBookings.filter(b => b.patientId === req.user.id);
+  const bookings = mem.labBookings.filter(b => b.patientId === req.user.id);
   res.json({ success: true, data: bookings, count: bookings.length });
 });
 
@@ -54,16 +54,17 @@ router.post("/book", authenticate, (req, res) => {
     phlebotomistPhone: "+91 98700 00000",
     createdAt: new Date().toISOString(),
   };
-  db.labBookings.push(booking);
+  mem.labBookings.push(booking);
   res.status(201).json({ success: true, data: booking, message: "Home collection booked. Phlebotomist will arrive at the scheduled time." });
 });
 
 // PATCH /api/labs/bookings/:id/status
 router.patch("/bookings/:id/status", authenticate, (req, res) => {
-  const idx = db.labBookings.findIndex(b => b.id === req.params.id);
+  const idx = mem.labBookings.findIndex(b => b.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, error: "Booking not found" });
-  db.labBookings[idx].status = req.body.status;
-  res.json({ success: true, data: db.labBookings[idx], message: "Status updated" });
+  mem.labBookings[idx].status = req.body.status;
+  res.json({ success: true, data: mem.labBookings[idx], message: "Status updated" });
 });
 
 module.exports = router;
+

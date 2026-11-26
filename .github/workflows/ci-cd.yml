@@ -64,7 +64,7 @@ jobs:
         env:
           PORT: 5001
           JWT_SECRET: test-jwt-secret-for-ci-only
-          NODE_ENV: test
+          NODE_ENV: development
 
       - name: Wait for server startup
         run: sleep 4

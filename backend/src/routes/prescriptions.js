@@ -1,6 +1,6 @@
 const express = require("express");
 const { authenticate, requireRole } = require("../middleware/auth");
-const { db } = require("../config/database");
+const { mem } = require("../config/database");
 const router = express.Router();
 
 const prescriptions = [];
@@ -19,7 +19,7 @@ router.post("/", authenticate, requireRole("doctor"), (req, res) => {
   if (!patientId || !diagnosis || !medications?.length) {
     return res.status(422).json({ success: false, error: "patientId, diagnosis, and medications are required" });
   }
-  const doctor = db.doctors.find(d => d.userId === req.user.id) || db.doctors[0];
+  const doctor = mem.doctors.find(d => d.userId === req.user.id) || mem.doctors[0];
   const rx = {
     id: `RX-${Math.floor(10000 + Math.random() * 90000)}`,
     appointmentId: appointmentId || null,
@@ -39,7 +39,7 @@ router.post("/", authenticate, requireRole("doctor"), (req, res) => {
 
   // Auto-add medications to patient's medication list
   medications.forEach(med => {
-    db.medications.push({
+    mem.medications.push({
       id: `MED-RX-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       patientId,
       name: med.name,
@@ -65,3 +65,4 @@ router.get("/:id", authenticate, (req, res) => {
 });
 
 module.exports = router;
+

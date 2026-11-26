@@ -1,12 +1,12 @@
 const express = require("express");
 const { authenticate, requireRole } = require("../middleware/auth");
-const { db } = require("../config/database");
+const { mem } = require("../config/database");
 const router = express.Router();
 
 // GET /api/doctors
 router.get("/", (req, res) => {
   const { specialty, available, online, search } = req.query;
-  let results = [...db.doctors];
+  let results = [...mem.doctors];
   if (specialty && specialty !== "All") results = results.filter(d => d.specialty?.toLowerCase() === specialty.toLowerCase());
   if (available === "true") results = results.filter(d => d.availableToday);
   if (online === "true") results = results.filter(d => d.isOnline);
@@ -16,13 +16,13 @@ router.get("/", (req, res) => {
 
 // GET /api/doctors/specialties
 router.get("/specialties", (req, res) => {
-  const specialties = [...new Set(db.doctors.map(d => d.specialty).filter(Boolean))].sort();
+  const specialties = [...new Set(mem.doctors.map(d => d.specialty).filter(Boolean))].sort();
   res.json({ success: true, data: specialties });
 });
 
 // GET /api/doctors/analytics - doctor dashboard analytics
 router.get("/analytics", authenticate, requireRole("doctor"), (req, res) => {
-  const doctorAppts = db.appointments.filter(a => a.doctorId === req.user.id || a.doctorId === "d1");
+  const doctorAppts = mem.appointments.filter(a => a.doctorId === req.user.id || a.doctorId === "d1");
   res.json({
     success: true,
     data: {
@@ -47,17 +47,18 @@ router.get("/analytics", authenticate, requireRole("doctor"), (req, res) => {
 
 // GET /api/doctors/:id
 router.get("/:id", (req, res) => {
-  const doctor = db.doctors.find(d => d.id === req.params.id);
+  const doctor = mem.doctors.find(d => d.id === req.params.id);
   if (!doctor) return res.status(404).json({ success: false, error: "Doctor not found" });
   res.json({ success: true, data: doctor });
 });
 
 // PATCH /api/doctors/:id/availability
 router.patch("/:id/availability", authenticate, requireRole("doctor"), (req, res) => {
-  const idx = db.doctors.findIndex(d => d.userId === req.user.id);
+  const idx = mem.doctors.findIndex(d => d.userId === req.user.id);
   if (idx === -1) return res.status(404).json({ success: false, error: "Doctor profile not found" });
-  db.doctors[idx] = { ...db.doctors[idx], ...req.body };
-  res.json({ success: true, data: db.doctors[idx], message: "Availability updated" });
+  mem.doctors[idx] = { ...mem.doctors[idx], ...req.body };
+  res.json({ success: true, data: mem.doctors[idx], message: "Availability updated" });
 });
 
 module.exports = router;
+

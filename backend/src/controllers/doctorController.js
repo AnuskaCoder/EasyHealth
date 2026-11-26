@@ -1,4 +1,4 @@
-const { db } = require("../config/database");
+const { mem: db } = require("../config/database");
 
 /**
  * GET /api/doctors
@@ -128,3 +128,4 @@ function getAnalytics(req, res, next) {
 }
 
 module.exports = { getAll, getById, getProfile, updateAvailability, getPatients, getAnalytics };
+

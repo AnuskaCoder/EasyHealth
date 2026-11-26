@@ -72,12 +72,13 @@ app.use("*", (req, res) => {
 app.use(errorHandler);
 
 // ── Start server ──────────────────────────────────────────────────────────────
-if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
+// Always start — NODE_ENV=test just suppresses HTTP logging
+app.listen(PORT, () => {
+  if (process.env.NODE_ENV !== "test") {
     console.log(`\n🏥 EasyHealth Backend running on port ${PORT}`);
-    console.log(`📋 API Docs: http://localhost:${PORT}/api/health`);
+    console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}\n`);
-  });
-}
+  }
+});
 
 module.exports = app;

@@ -7,7 +7,7 @@ node_modules/
 dist/
 build/
 
-# Environment variables
+# Environment variables — NEVER commit secrets
 .env
 .env.local
 .env.development.local
@@ -37,5 +37,16 @@ dev-server.log
 ajv*.log
 npm-out.log
 npm-install*.log
+
+# Python cache — keep .py files but exclude bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.Python
+
+# Docker
+.dockerignore
 
 .vercel

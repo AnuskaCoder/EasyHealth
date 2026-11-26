@@ -1,4 +1,4 @@
-const { db } = require("../config/database");
+const { mem: db } = require("../config/database");
 
 function generateRecordId() {
   return `REC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -124,3 +124,4 @@ function deleteRecord(req, res, next) {
 }
 
 module.exports = { upload, getAll, getById, addAiSummary, deleteRecord };
+
