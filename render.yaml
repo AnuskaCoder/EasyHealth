@@ -1,5 +1,5 @@
-# Render Blueprint for the API, AI service, and PostgreSQL database.
-# Deploy through Render Dashboard > New > Blueprint and review database pricing before creating resources.
+# No-cost demo Blueprint for the API, AI service, and PostgreSQL database.
+# Free Render Postgres expires after 30 days; do not store real patient data.
 services:
   - type: web
     name: easyhealth-api
@@ -32,10 +32,9 @@ services:
     plan: free
     healthCheckPath: /ai/health
 
-# Use persistent PostgreSQL rather than Render's expiring free database for account/request data.
-# Review the plan and price in Render before creating the Blueprint.
+# Free Postgres is suitable only for a temporary demo, not production healthcare data.
 databases:
   - name: easyhealth-db
     databaseName: easyhealth
     user: easyhealth
-    plan: 0.1c-256mb
+    plan: free
