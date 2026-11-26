@@ -182,9 +182,13 @@ export function seedDemoAccounts(): void {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts2));
 }
 
-function getDemoAccounts(): DemoAccount[] {
+export function getDemoAccounts(): DemoAccount[] {
   try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || "[]"); }
   catch { return []; }
+}
+
+export function getAccounts(): DemoAccount[] {
+  return getDemoAccounts();
 }
 
 export function loginDemo(email: string, password: string): DemoAccount {

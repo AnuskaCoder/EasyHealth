@@ -1,8 +1,8 @@
+const env = require("./config/env");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
-require("dotenv").config();
 
 const { generalLimiter, authLimiter } = require("./middleware/rateLimiter");
 const errorHandler = require("./middleware/errorHandler");
@@ -16,6 +16,7 @@ const pharmacyRoutes = require("./routes/pharmacy");
 const labRoutes = require("./routes/labs");
 const emergencyRoutes = require("./routes/emergency");
 const recordRoutes = require("./routes/records");
+const consentRoutes = require("./routes/consent");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -62,6 +63,7 @@ app.use("/api/pharmacy", pharmacyRoutes);
 app.use("/api/labs", labRoutes);
 app.use("/api/emergency", emergencyRoutes);
 app.use("/api/records", recordRoutes);
+app.use("/api/consent", consentRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use("*", (req, res) => {

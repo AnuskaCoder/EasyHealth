@@ -1,21 +1,26 @@
+/**
+ * Doctor Controller
+ * Uses DoctorRepository
+ */
+const doctorRepository = require("../repositories/doctorRepository");
+const appointmentRepository = require("../repositories/appointmentRepository");
 const { mem: db } = require("../config/database");
 
 /**
  * GET /api/doctors
  */
-function getAll(req, res, next) {
+async function getAll(req, res, next) {
   try {
     const { specialty, available } = req.query;
-    let results = [...db.doctors];
+    const filterSpec = (specialty && specialty !== "All") ? specialty : undefined;
+    const filterAvail = available === "true" ? true : undefined;
 
-    if (specialty && specialty !== "All") {
-      results = results.filter(d => d.specialty && d.specialty.toLowerCase() === specialty.toLowerCase());
-    }
-    if (available === "true") {
-      results = results.filter(d => d.availableToday);
-    }
+    const doctors = await doctorRepository.getAll({
+      specialty: filterSpec,
+      availableToday: filterAvail,
+    });
 
-    return res.json({ success: true, count: results.length, doctors: results });
+    return res.json({ success: true, count: doctors.length, doctors });
   } catch (err) {
     next(err);
   }
@@ -24,9 +29,9 @@ function getAll(req, res, next) {
 /**
  * GET /api/doctors/:id
  */
-function getById(req, res, next) {
+async function getById(req, res, next) {
   try {
-    const doctor = db.doctors.find(d => d.id === req.params.id);
+    const doctor = await doctorRepository.findById(req.params.id);
     if (!doctor) {
       return res.status(404).json({ success: false, error: "Doctor not found", code: 404 });
     }
@@ -37,11 +42,11 @@ function getById(req, res, next) {
 }
 
 /**
- * GET /api/doctors/profile  (auth required — doctor only)
+ * GET /api/doctors/profile (auth required — doctor only)
  */
-function getProfile(req, res, next) {
+async function getProfile(req, res, next) {
   try {
-    const doctor = db.doctors.find(d => d.userId === req.user.id);
+    const doctor = await doctorRepository.findByUserId(req.user.id);
     if (!doctor) {
       return res.status(404).json({ success: false, error: "Doctor profile not found", code: 404 });
     }
@@ -52,37 +57,49 @@ function getProfile(req, res, next) {
 }
 
 /**
- * PUT /api/doctors/availability  (auth required)
+ * PUT /api/doctors/availability (auth required)
  */
-function updateAvailability(req, res, next) {
+async function updateAvailability(req, res, next) {
   try {
-    const idx = db.doctors.findIndex(d => d.userId === req.user.id);
-    if (idx === -1) {
-      return res.status(404).json({ success: false, error: "Doctor not found", code: 404 });
+    const doctor = await doctorRepository.findByUserId(req.user.id);
+    if (!doctor) {
+      return res.status(404).json({ success: false, error: "Doctor profile not found", code: 404 });
     }
-    const { availableToday, isOnline, nextSlot } = req.body;
-    if (availableToday !== undefined) db.doctors[idx].availableToday = availableToday;
-    if (isOnline !== undefined) db.doctors[idx].isOnline = isOnline;
-    if (nextSlot !== undefined) db.doctors[idx].nextSlot = nextSlot;
-    return res.json({ success: true, message: "Availability updated", doctor: db.doctors[idx] });
+    const { availableToday, nextSlot } = req.body;
+    if (availableToday !== undefined) doctor.availableToday = Boolean(availableToday);
+    if (nextSlot) doctor.nextSlot = nextSlot;
+
+    return res.json({ success: true, message: "Availability updated", doctor });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * GET /api/doctors/patients  (auth required — doctor only)
+ * GET /api/doctors/patients (doctor only)
  */
-function getPatients(req, res, next) {
+async function getMyPatients(req, res, next) {
   try {
-    const doctor = db.doctors.find(d => d.userId === req.user.id);
-    if (!doctor) {
-      return res.status(404).json({ success: false, error: "Doctor not found", code: 404 });
-    }
-    // Get unique patients from appointments with this doctor
-    const appts = db.appointments.filter(a => a.doctorId === doctor.id);
-    const patientIds = [...new Set(appts.map(a => a.patientId))];
-    const patients = db.patients.filter(p => patientIds.includes(p.userId || p.id));
+    const doctor = await doctorRepository.findByUserId(req.user.id);
+    const doctorId = doctor ? doctor.id : req.user.id;
+
+    const appointments = await appointmentRepository.findByDoctorId(doctorId);
+    const patientIds = [...new Set(appointments.map(a => a.patientId))];
+
+    const patients = patientIds.map(pid => {
+      const p = db.patients.find(x => x.userId === pid || x.id === pid);
+      const lastAppt = appointments.find(a => a.patientId === pid);
+      return {
+        id: pid,
+        name: p?.name || lastAppt?.patientName || "Patient",
+        age: p?.age || lastAppt?.patientAge || 28,
+        gender: p?.gender || "Female",
+        bloodGroup: p?.bloodGroup || "B+",
+        lastVisit: lastAppt?.date || null,
+        conditions: p?.chronicConditions || [],
+      };
+    });
+
     return res.json({ success: true, count: patients.length, patients });
   } catch (err) {
     next(err);
@@ -90,36 +107,31 @@ function getPatients(req, res, next) {
 }
 
 /**
- * GET /api/doctors/analytics  (auth required — doctor only)
+ * GET /api/doctors/stats (doctor dashboard metrics)
  */
-function getAnalytics(req, res, next) {
+async function getStats(req, res, next) {
   try {
-    const doctor = db.doctors.find(d => d.userId === req.user.id);
-    const doctorId = doctor ? doctor.id : "d1";
+    const doctor = await doctorRepository.findByUserId(req.user.id);
+    const doctorId = doctor ? doctor.id : req.user.id;
 
-    const allAppts = db.appointments.filter(a => a.doctorId === doctorId);
-    const completed = allAppts.filter(a => a.status === "completed");
-    const upcoming = allAppts.filter(a => a.status === "upcoming");
-    const revenue = completed.reduce((sum, a) => sum + (a.fee || 0), 0);
+    const appointments = await appointmentRepository.findByDoctorId(doctorId);
+    const today = new Date().toISOString().split("T")[0];
+
+    const todayAppts = appointments.filter(a => a.date === today);
+    const completed = appointments.filter(a => a.status === "completed");
+    const uniquePatients = new Set(appointments.map(a => a.patientId)).size;
+    const totalEarnings = completed.reduce((sum, a) => sum + (a.fee || 1000), 0);
 
     return res.json({
       success: true,
-      analytics: {
-        totalAppointments: allAppts.length,
+      stats: {
+        todayAppointments: todayAppts.length,
+        totalAppointments: appointments.length,
         completedAppointments: completed.length,
-        upcomingAppointments: upcoming.length,
-        monthlyConsultations: 148,
-        netRevenue: revenue || 184000,
-        satisfactionRating: doctor ? doctor.rating : 4.9,
-        avgWaitTimeMinutes: 6.5,
-        diseasePrevalence: [
-          { disease: "Essential Hypertension", percentage: 32 },
-          { disease: "Coronary Artery Disease", percentage: 26 },
-          { disease: "Arrhythmia & Palpitations", percentage: 18 },
-          { disease: "Nutritional Anemia & Fatigue", percentage: 14 },
-          { disease: "Congestive Heart Failure", percentage: 10 },
-        ],
-        modalitySplit: { telehealthVideo: 46, hospitalInPerson: 38, emergencyTriage: 16 },
+        totalPatients: uniquePatients,
+        totalEarnings,
+        rating: doctor?.rating || 4.9,
+        reviewsCount: doctor?.reviewCount || 120,
       },
     });
   } catch (err) {
@@ -127,5 +139,4 @@ function getAnalytics(req, res, next) {
   }
 }
 
-module.exports = { getAll, getById, getProfile, updateAvailability, getPatients, getAnalytics };
-
+module.exports = { getAll, getById, getProfile, updateAvailability, getMyPatients, getStats };

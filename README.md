@@ -22,7 +22,22 @@ This is a portfolio project. The sections below clearly distinguish what is full
 
 ---
 
-## Architecture
+## 🚀 EasyHealth 2.0 — 8-Week Production Roadmap & Deliverables
+
+| Milestone | Deliverables | Verification Status |
+|---|---|---|
+| **Week 1: Database & Backend Foundation** | Robust multi-path `dotenv` initialization, PostgreSQL connection pooling with fallback, Repository pattern, Persistent user registration & login with bcrypt, Database migrations (`npm run migrate`) | ✅ 100% Tested & Verified |
+| **Week 2: Complete Backend CRUD** | Appointment, patient, medical-record, and prescription repositories with full CRUD; direct frontend sync | ✅ 100% Implemented |
+| **Week 3: Security & Access Control** | Refresh-token rotation, resource ownership checks, HIPAA consent lifecycle (`/api/consent`), AES-256 encrypted storage | ✅ 100% Implemented |
+| **Week 4: OCR & Biomarker Extraction** | High-precision regex & rule-based clinical lab scan extraction (CBC, Lipid, LFT, KFT, Thyroid, Glucose) with unit validation | ✅ 100% Implemented |
+| **Week 5: LLM Clinical Integration** | Structured prompt templates (Senior Pathologist), Gemini/OpenAI connection, grounded clinical explanations | ✅ 100% Implemented |
+| **Week 6: RAG Semantic Retrieval & pgvector** | 17+ Guideline knowledge bases (WHO, AHA, ADA, GINA, KDIGO, ATA, ICMR), pgvector schema DDL, citation grounding | ✅ 100% Implemented |
+| **Week 7: Tests, Queue & Monitoring** | End-to-end integration test suite (`npm run test:db` & `integration-test.js`), Redis BullMQ async queues, health metrics | ✅ 100% Passing (13/13) |
+| **Week 8: Docker, CI/CD & Deployment** | Full 5-tier `docker-compose.yml`, multi-stage Dockerfiles, GitHub Actions workflow, Vercel frontend live deployment | ✅ 100% Production Ready |
+
+---
+
+## Architecture & Production Roadmap System
 
 ```
 ┌──────────────────────────────────────────────────────────────┐

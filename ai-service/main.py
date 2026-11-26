@@ -46,6 +46,7 @@ class RagChatRequest(BaseModel):
 class OcrRequest(BaseModel):
     file_name: str
     document_type: Optional[str] = "Blood Test"
+    raw_text: Optional[str] = None
 
 class TriageRequest(BaseModel):
     chief_complaint: str
@@ -83,7 +84,7 @@ def rag_chat(req: RagChatRequest):
 @app.post("/ai/ocr-extract")
 def ocr_extract(req: OcrRequest):
     try:
-        result = parse_medical_scan_ocr(req.file_name, req.document_type)
+        result = parse_medical_scan_ocr(req.file_name, req.document_type, req.raw_text)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

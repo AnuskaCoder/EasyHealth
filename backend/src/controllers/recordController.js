@@ -1,39 +1,36 @@
+/**
+ * Medical Records Controller
+ * Uses RecordRepository
+ */
+const recordRepository = require("../repositories/recordRepository");
 const { mem: db } = require("../config/database");
-
-function generateRecordId() {
-  return `REC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
 
 /**
  * POST /api/records
  */
-function upload(req, res, next) {
+async function upload(req, res, next) {
   try {
-    const { name, type, date, uploadedBy, fileName, fileUrl, fileSizeKb, tags } = req.body;
+    const { name, type, date, uploadedBy, fileName, fileUrl, fileSizeKb, tags, biomarkers, aiSummary, aiAnalysed } = req.body;
 
     if (!name || !type) {
       return res.status(422).json({ success: false, error: "Record name and type are required", code: 422 });
     }
 
-    const record = {
-      id: generateRecordId(),
+    const record = await recordRepository.create({
       patientId: req.user.id,
       name,
       type,
       date: date || new Date().toISOString().split("T")[0],
-      uploadedBy: uploadedBy || req.user.name,
+      uploadedBy: uploadedBy || req.user.name || "Patient Upload",
       fileName: fileName || null,
       fileUrl: fileUrl || null,
       fileSizeKb: fileSizeKb || null,
-      aiSummary: null,
-      aiAnalysed: false,
-      isEncrypted: true,
       tags: tags || [],
-      isDeleted: false,
-      createdAt: new Date().toISOString(),
-    };
+      biomarkers: biomarkers || [],
+      aiSummary: aiSummary || null,
+      aiAnalysed: aiAnalysed || false,
+    });
 
-    db.records.unshift(record);
     return res.status(201).json({ success: true, message: "Record uploaded", record });
   } catch (err) {
     next(err);
@@ -43,11 +40,10 @@ function upload(req, res, next) {
 /**
  * GET /api/records
  */
-function getAll(req, res, next) {
+async function getAll(req, res, next) {
   try {
     let targetPatientId = req.user.id;
 
-    // Doctor can view records for a specific patient (with consent)
     if (req.user.role === "doctor" && req.query.patientId) {
       const hasConsent = db.consentPermissions.some(
         c => c.patientId === req.query.patientId &&
@@ -60,10 +56,7 @@ function getAll(req, res, next) {
       targetPatientId = req.query.patientId;
     }
 
-    const records = db.records
-      .filter(r => r.patientId === targetPatientId && !r.isDeleted)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
+    const records = await recordRepository.findByPatientId(targetPatientId);
     return res.json({ success: true, count: records.length, records });
   } catch (err) {
     next(err);
@@ -73,9 +66,9 @@ function getAll(req, res, next) {
 /**
  * GET /api/records/:id
  */
-function getById(req, res, next) {
+async function getById(req, res, next) {
   try {
-    const record = db.records.find(r => r.id === req.params.id && !r.isDeleted);
+    const record = await recordRepository.findById(req.params.id);
     if (!record) {
       return res.status(404).json({ success: false, error: "Record not found", code: 404 });
     }
@@ -88,35 +81,37 @@ function getById(req, res, next) {
 /**
  * PATCH /api/records/:id/ai-summary
  */
-function addAiSummary(req, res, next) {
+async function addAiSummary(req, res, next) {
   try {
-    const idx = db.records.findIndex(r => r.id === req.params.id);
-    if (idx === -1) {
+    const { summary, biomarkers } = req.body;
+    const updated = await recordRepository.updateAiAnalysis(req.params.id, {
+      aiSummary: summary,
+      biomarkers: biomarkers || []
+    });
+    if (!updated) {
       return res.status(404).json({ success: false, error: "Record not found", code: 404 });
     }
-    const { summary, biomarkers } = req.body;
-    db.records[idx].aiSummary = summary;
-    db.records[idx].aiAnalysed = true;
-    if (biomarkers) db.records[idx].biomarkers = biomarkers;
-    return res.json({ success: true, message: "AI summary saved", record: db.records[idx] });
+    return res.json({ success: true, message: "AI summary saved", record: updated });
   } catch (err) {
     next(err);
   }
 }
 
 /**
- * DELETE /api/records/:id  (soft delete)
+ * DELETE /api/records/:id
  */
-function deleteRecord(req, res, next) {
+async function deleteRecord(req, res, next) {
   try {
-    const idx = db.records.findIndex(r => r.id === req.params.id);
-    if (idx === -1) {
+    const record = await recordRepository.findById(req.params.id);
+    if (!record) {
       return res.status(404).json({ success: false, error: "Record not found", code: 404 });
     }
-    if (db.records[idx].patientId !== req.user.id) {
+    if (record.patientId !== req.user.id) {
       return res.status(403).json({ success: false, error: "Forbidden: not your record", code: 403 });
     }
-    db.records[idx].isDeleted = true;
+    // Set deleted flag in memory
+    const memRec = db.records.find(r => r.id === req.params.id);
+    if (memRec) memRec.isDeleted = true;
     return res.json({ success: true, message: "Record deleted" });
   } catch (err) {
     next(err);
@@ -124,4 +119,3 @@ function deleteRecord(req, res, next) {
 }
 
 module.exports = { upload, getAll, getById, addAiSummary, deleteRecord };
-

@@ -175,3 +175,17 @@ CREATE INDEX IF NOT EXISTS idx_appointments_doctor ON appointments(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_medical_reports_patient ON medical_reports(patient_id);
 CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON doctor_prescriptions(patient_id);
 CREATE INDEX IF NOT EXISTS idx_medicines_category ON medicines(category);
+
+-- 11. RAG CLINICAL KNOWLEDGE CHUNKS (pgvector Semantic Search)
+CREATE TABLE IF NOT EXISTS rag_document_chunks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    authority VARCHAR(100) NOT NULL,
+    guideline_title VARCHAR(255) NOT NULL,
+    chunk_text TEXT NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    url VARCHAR(500),
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_rag_category ON rag_document_chunks(category);

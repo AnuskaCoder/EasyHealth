@@ -59,6 +59,12 @@ jobs:
       - name: Install backend dependencies
         run: npm ci
 
+      - name: Run Backend Foundation & Repository Tests
+        run: npm run test:db
+
+      - name: Run Integration & AI Evaluation Suite
+        run: node src/scripts/integration-test.js
+
       - name: Start backend server
         run: node src/server.js &
         env:
