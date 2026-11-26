@@ -158,6 +158,7 @@ async function runMigration() {
     if (client) {
       await client.query("ROLLBACK").catch(() => {});
     }
+    throw err;
   } finally {
     if (client) client.release();
     await pool.end();

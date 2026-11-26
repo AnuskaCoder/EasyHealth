@@ -2,9 +2,19 @@ const crypto = require("crypto");
 
 // AES-256-GCM Encryption Key and Algorithm
 const ALGORITHM = "aes-256-gcm";
-const SECRET_KEY = process.env.ENCRYPTION_KEY
-  ? Buffer.from(process.env.ENCRYPTION_KEY, "hex")
-  : crypto.scryptSync("easyhealth-phi-encryption-secret-2026", "salt", 32);
+function deriveSecretKey(value) {
+  if (!value) return crypto.scryptSync("easyhealth-phi-encryption-secret-2026", "salt", 32);
+  const configuredKey = value.trim();
+  if (/^[0-9a-f]{64}$/i.test(configuredKey)) return Buffer.from(configuredKey, "hex");
+
+  const base64Key = Buffer.from(configuredKey, "base64");
+  if (base64Key.length === 32) return base64Key;
+
+  // Keep older passphrase-style development values usable while deriving an AES-256 key.
+  return crypto.scryptSync(configuredKey, "easyhealth-phi-encryption-v1", 32);
+}
+
+const SECRET_KEY = deriveSecretKey(process.env.ENCRYPTION_KEY);
 
 /**
  * Encrypt sensitive Patient Health Information (PHI)

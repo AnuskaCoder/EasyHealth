@@ -170,6 +170,18 @@ cp backend/.env.example backend/.env
 docker-compose up --build
 ```
 
+### Deploy API & AI services on Render
+
+The Vercel deployment hosts only the frontend. To enable authenticated API orders, shared blood requests, and optional online AI, create a Render Blueprint from this repository's `render.yaml`:
+
+1. In Render, choose **New → Blueprint**, connect `AnuskaCoder/EasyHealth`, and select the `main` branch.
+2. Review the PostgreSQL plan and pricing before creating resources. The API and AI web services use Render's free plan; free services can sleep between requests.
+3. The backend container applies `backend/database/schema.sql` before starting. Render generates `JWT_SECRET` and `ENCRYPTION_KEY`; never replace them with the example values.
+4. After the services are created, copy their public URLs into Vercel Production environment variables: `VITE_API_URL` as `<API URL>/api` and `VITE_AI_SERVICE_URL` as the AI service URL. Redeploy the Vercel frontend.
+5. To enable Gemini responses, add `GEMINI_API_KEY` as a secret environment variable on the Render AI service. The clinical rules-based fallback works without it.
+
+Render resources require a Render account and may incur PostgreSQL charges. Do not use the demo data or service as a substitute for clinical or blood-bank verification.
+
 ### Run Tests
 ```bash
 npm test        # 28 unit tests
