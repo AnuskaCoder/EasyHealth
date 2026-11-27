@@ -158,8 +158,11 @@ def _gemini_request(model: str, operation: str, payload: Dict[str, Any]) -> Dict
         )
         response.raise_for_status()
         return response.json()
-    except requests.RequestException as exc:
-        raise AIServiceError("Gemini request failed. Check provider availability and configuration.") from exc
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        raise AIServiceError(f"Gemini request failed with HTTP {status}.") from None
+    except requests.RequestException:
+        raise AIServiceError("Gemini request failed due to a network error.") from None
     except ValueError as exc:
         raise AIServiceError("Gemini returned an invalid response.") from exc
 
