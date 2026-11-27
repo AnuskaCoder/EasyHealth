@@ -6,9 +6,9 @@ from typing import Any, Dict, List
 import psycopg
 import requests
 
-EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
 EMBEDDING_DIMENSIONS = 768
-CHAT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+CHAT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 GUIDELINE_CORPUS = [
     {
         "source_key": "who-anemia",
