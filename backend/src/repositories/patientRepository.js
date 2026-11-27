@@ -37,7 +37,7 @@ const patientRepository = {
         `SELECT p.*, u.email
          FROM patient_profiles p
          LEFT JOIN users u ON p.user_id = u.id
-         WHERE p.user_id = $1 OR p.id::text = $1`,
+         WHERE p.user_id = $1 OR p.id = $1`,
         [userId]
       );
       return formatPatientFromPg(res.rows[0]);
