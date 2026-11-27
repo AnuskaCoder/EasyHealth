@@ -28,6 +28,8 @@ async function runVerification() {
   }
 
   try {
+    await db.initialize();
+
     // 1. Dotenv test
     console.log("\n[Test 1] Environment & Dotenv Initialization");
     assert(!!env.JWT_SECRET, `JWT_SECRET loaded (length: ${env.JWT_SECRET.length})`);
@@ -38,7 +40,7 @@ async function runVerification() {
     // 2. Database connection mode
     console.log("\n[Test 2] Database Connection & Driver Status");
     const isPg = db.isPostgres();
-    console.log(`  Database backend: ${isPg ? "PostgreSQL (Active)" : "In-Memory Store (Active fallback)"}`);
+    console.log(`  Database backend: ${isPg ? "PostgreSQL (Active)" : "Explicit in-memory mode"}`);
     assert(true, "Database layer initialized without fatal errors");
 
     // 3. User Repository: Authentication & Registration

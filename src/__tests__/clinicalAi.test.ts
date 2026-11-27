@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { processClinicalQuery } from "../services/clinicalAiEngine";
+import { askOnlineClinicalAi } from "../services/onlineClinicalAi";
 import { PatientProfile } from "../types";
 
 const mockProfile: PatientProfile = {
@@ -15,6 +16,38 @@ describe("clinicalAiEngine", () => {
   it("responds to any query with non-empty answer", () => {
     const result = processClinicalQuery("hello", { profile: mockProfile, reports: [], medications: [] });
     expect(result.answer.length).toBeGreaterThan(50);
+  });
+
+  describe("onlineClinicalAi", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("sends only the explicitly submitted query", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ answer: "Grounded answer", provider: "Google Gemini" }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await askOnlineClinicalAi("What does this symptom mean?");
+
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        query: "What does this symptom mean?",
+      });
+    });
+
+    it("surfaces API errors so the UI can label its local fallback", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ detail: "GEMINI_API_KEY is not configured." }),
+      }));
+
+      const result = await askOnlineClinicalAi("What should I ask my doctor?");
+
+      expect(result?.provider).toBe("Unavailable");
+      expect(result?.error).toMatch(/GEMINI_API_KEY/);
+    });
   });
 
   it("includes a category in every response", () => {

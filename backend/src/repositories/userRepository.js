@@ -10,7 +10,8 @@ const userRepository = {
     const cleanEmail = email.trim().toLowerCase();
     if (db.isPostgres()) {
       const res = await query(
-        `SELECT id, email, password_hash AS "passwordHash", role, is_active AS "isActive", created_at AS "createdAt"
+        `SELECT id, email, password_hash AS "passwordHash", role, name, phone,
+                is_active AS "isActive", created_at AS "createdAt"
          FROM users
          WHERE LOWER(email) = $1`,
         [cleanEmail]
@@ -23,7 +24,8 @@ const userRepository = {
   async findById(id) {
     if (db.isPostgres()) {
       const res = await query(
-        `SELECT id, email, password_hash AS "passwordHash", role, is_active AS "isActive", created_at AS "createdAt"
+        `SELECT id, email, password_hash AS "passwordHash", role, name, phone,
+                is_active AS "isActive", created_at AS "createdAt"
          FROM users
          WHERE id = $1`,
         [id]
@@ -40,10 +42,10 @@ const userRepository = {
 
     if (db.isPostgres()) {
       const res = await query(
-        `INSERT INTO users (id, email, password_hash, role, is_active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, TRUE, $5, $5)
-         RETURNING id, email, role, is_active AS "isActive", created_at AS "createdAt"`,
-        [id, cleanEmail, passwordHash, role, now]
+        `INSERT INTO users (id, email, password_hash, role, name, phone, is_active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, $7)
+         RETURNING id, email, role, name, phone, is_active AS "isActive", created_at AS "createdAt"`,
+        [id, cleanEmail, passwordHash, role, name, phone, now]
       );
       const user = res.rows[0];
       user.name = name;

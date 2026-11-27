@@ -1,198 +1,320 @@
-"""
-EasyHealth AI/ML Microservice - RAG (Retrieval-Augmented Generation) Medical Q&A
-Grounds responses in verified guidelines (WHO, AHA, ADA, GINA, KDIGO, ATA, ICMR) & Patient EHR
-"""
+"""Gemini-backed clinical guidance retrieval using PostgreSQL and pgvector."""
 import os
-from typing import Dict, Any, List, Optional
+import math
+from typing import Any, Dict, List
+
+import psycopg
 import requests
 
-TRUSTED_KNOWLEDGE_BASE = [
+EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+EMBEDDING_DIMENSIONS = 768
+CHAT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GUIDELINE_CORPUS = [
     {
-        "topic": "anemia",
-        "keywords": ["anemia", "iron", "hemoglobin", "ferrous", "fatigue", "hb", "cbc", "pale", "rbc"],
+        "source_key": "who-anemia",
+        "category": "anemia",
         "authority": "World Health Organization (WHO) & ICMR",
         "guideline_title": "WHO Clinical Guidelines on Nutritional Iron Deficiency Anemia",
-        "citation": "Daily elemental iron (30-60mg) paired with Vitamin C boosts absorption up to 300%. Tannins in tea and coffee inhibit bioavailability and must be separated by 1-2 hours.",
-        "url": "https://www.who.int/health-topics/anaemia"
+        "chunk_text": (
+            "Iron deficiency and anemia should be assessed using a person's symptoms, "
+            "medical history, and appropriate laboratory tests. A clinician should "
+            "confirm the cause and recommend treatment; do not start or change iron "
+            "supplements based only on chatbot output."
+        ),
+        "url": "https://www.who.int/health-topics/anaemia",
     },
     {
-        "topic": "cardiac",
-        "keywords": ["cholesterol", "heart", "cardio", "bp", "blood pressure", "hypertension", "lipids", "ldl", "hdl", "triglycerides", "statin"],
-        "authority": "American Heart Association (AHA) 2024",
-        "guideline_title": "AHA/ACC Cardiovascular Risk Reduction Guidelines",
-        "citation": "Target Total Cholesterol <200 mg/dL, LDL <100 mg/dL. Resting systolic blood pressure <120 mmHg and diastolic <80 mmHg provides baseline arterial protection.",
-        "url": "https://www.heart.org/guidelines"
+        "source_key": "aha-cardiac",
+        "category": "cardiac",
+        "authority": "American Heart Association (AHA)",
+        "guideline_title": "AHA Cardiovascular Health Information",
+        "chunk_text": (
+            "Blood pressure and cholesterol results need to be interpreted with "
+            "individual risk factors and repeated measurements where appropriate. "
+            "Discuss abnormal readings and treatment decisions with a qualified "
+            "health professional; a chatbot cannot diagnose cardiovascular disease."
+        ),
+        "url": "https://www.heart.org/en/health-topics",
     },
     {
-        "topic": "diabetes",
-        "keywords": ["diabetes", "sugar", "glucose", "hba1c", "insulin", "metformin", "fasting sugar", "postprandial", "hyperglycemia"],
-        "authority": "American Diabetes Association (ADA) 2024",
+        "source_key": "ada-diabetes",
+        "category": "diabetes",
+        "authority": "American Diabetes Association (ADA)",
         "guideline_title": "Standards of Care in Diabetes",
-        "citation": "Fasting plasma glucose 70-99 mg/dL is normal; 100-125 mg/dL indicates prediabetes. Target HbA1c for non-pregnant adults is <7.0% (individualized to <6.5% for younger patients).",
-        "url": "https://diabetes.org"
+        "chunk_text": (
+            "Diabetes care is individualized and uses validated laboratory tests, "
+            "medical history, and clinician assessment. Do not start, stop, or "
+            "change diabetes medication based on chatbot output. Seek urgent care "
+            "for severe or rapidly worsening symptoms."
+        ),
+        "url": "https://diabetes.org/health-wellness",
     },
     {
-        "topic": "asthma",
-        "keywords": ["asthma", "cough", "wheezing", "montelukast", "breathlessness", "inhaler", "bronchospasm", "respiratory", "dust", "allergy"],
-        "authority": "Global Initiative for Asthma (GINA) 2024",
+        "source_key": "gina-asthma",
+        "category": "asthma",
+        "authority": "Global Initiative for Asthma (GINA)",
         "guideline_title": "Global Strategy for Asthma Management and Prevention",
-        "citation": "Leukotriene receptor antagonists (Montelukast 10mg) taken at bedtime mitigate nocturnal bronchospasm and reduce airway hyperresponsiveness.",
-        "url": "https://ginasthma.org"
+        "chunk_text": (
+            "Asthma symptoms and treatment plans should be reviewed with a clinician. "
+            "Follow the personal asthma action plan provided by the treating clinician. "
+            "Severe breathing difficulty requires immediate emergency assistance."
+        ),
+        "url": "https://ginasthma.org/",
     },
     {
-        "topic": "thyroid",
-        "keywords": ["thyroid", "tsh", "t3", "t4", "hypothyroid", "hyperthyroid", "levothyroxine", "thyronorm"],
+        "source_key": "ata-thyroid",
+        "category": "thyroid",
         "authority": "American Thyroid Association (ATA)",
-        "guideline_title": "Clinical Practice Guidelines for Hypothyroidism in Adults",
-        "citation": "Normal serum TSH reference range is 0.4 to 4.5 mIU/L. Levothyroxine must be taken on an empty stomach with plain water at least 30-60 minutes before breakfast.",
-        "url": "https://www.thyroid.org"
+        "guideline_title": "Thyroid Disease Information",
+        "chunk_text": (
+            "Thyroid test results depend on the specific test, reference interval, "
+            "medicines, and clinical context. A qualified clinician should interpret "
+            "results and guide any changes to thyroid medication."
+        ),
+        "url": "https://www.thyroid.org/thyroid-information/",
     },
     {
-        "topic": "renal",
-        "keywords": ["kidney", "renal", "creatinine", "urea", "egfr", "proteinuria", "microalbumin", "uti", "urine"],
-        "authority": "KDIGO (Kidney Disease: Improving Global Outcomes)",
-        "guideline_title": "KDIGO Clinical Practice Guideline for the Evaluation and Management of CKD",
-        "citation": "Serum creatinine >1.3 mg/dL or eGFR <60 mL/min/1.73m² warrants nephrological staging. Adequate hydration and avoiding chronic NSAID usage preserves glomerular filtration.",
-        "url": "https://kdigo.org"
+        "source_key": "kdigo-kidney",
+        "category": "renal",
+        "authority": "Kidney Disease: Improving Global Outcomes (KDIGO)",
+        "guideline_title": "KDIGO Clinical Practice Guidelines",
+        "chunk_text": (
+            "Kidney health assessment may include blood and urine tests interpreted "
+            "over time and alongside medical history. A clinician should evaluate "
+            "abnormal kidney results and advise on treatment or fluid intake."
+        ),
+        "url": "https://kdigo.org/guidelines/",
     },
     {
-        "topic": "fever_infection",
-        "keywords": ["fever", "temperature", "paracetamol", "infection", "chills", "dengue", "malaria", "typhoid", "viral"],
-        "authority": "ICMR Clinical Management Protocols",
-        "guideline_title": "ICMR Guidelines on Acute Febrile Illnesses",
-        "citation": "Paracetamol 650mg every 6 hours (max 4g/day) is the first-line antipyretic. In endemic tropical regions, NSAIDs should be avoided during undifferentiated fevers to prevent thrombocytopenic bleeding.",
-        "url": "https://www.icmr.gov.in"
+        "source_key": "icmr-fever",
+        "category": "fever",
+        "authority": "Indian Council of Medical Research (ICMR)",
+        "guideline_title": "ICMR Health Research and Clinical Guidance",
+        "chunk_text": (
+            "Fever can have many causes and should be assessed in its clinical "
+            "context. Seek medical care for severe symptoms, difficulty breathing, "
+            "confusion, dehydration, or a rapidly worsening condition. Do not use "
+            "chatbot output to select or change medication doses."
+        ),
+        "url": "https://www.icmr.gov.in/",
     },
     {
-        "topic": "emergency",
-        "keywords": ["chest pain", "heart attack", "stroke", "paralysis", "breathing difficulty", "severe pain", "unconscious", "emergency", "ambulance", "108"],
+        "source_key": "acep-emergency",
+        "category": "emergency",
         "authority": "American College of Emergency Physicians (ACEP)",
-        "guideline_title": "ACEP Emergency Triage and Resuscitation Protocols",
-        "citation": "Acute crushing chest pain, dyspnea at rest, sudden limb weakness, or facial droop are Red-Flag medical emergencies requiring immediate emergency transfer or calling 108/911.",
-        "url": "https://www.acep.org"
-    }
+        "guideline_title": "Emergency Care Information",
+        "chunk_text": (
+            "Possible heart attack or stroke, loss of consciousness, severe breathing "
+            "difficulty, or uncontrolled bleeding requires immediate emergency "
+            "assessment. Contact local emergency services; do not wait for an online "
+            "assistant to assess an emergency."
+        ),
+        "url": "https://www.acep.org/",
+    },
 ]
 
-def _generate_online_answer(user_query: str, sources: List[Dict[str, str]]) -> Optional[str]:
-    """Use Gemini only after the user explicitly opts in; never send EHR context."""
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return None
 
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    source_text = "\n".join(
-        f"- {source.get('title', source.get('guideline_title', 'Clinical source'))} ({source['authority']}): {source['quote']}"
-        for source in sources
-    )
-    prompt = f"""You are an evidence-aware health education assistant, not a doctor.
-Answer the user's health question in plain language. Do not claim to diagnose, prescribe,
-or replace a clinician. Do not invent test results, citations, or certainty. If the question
-is underspecified, state what details matter and ask concise follow-up questions. Give safe,
-practical next steps and clear red flags. For a possible immediate emergency in India, advise
-calling 112 or 108. Distinguish general information from personalized medical advice.
+class AIConfigurationError(Exception):
+    """Raised when a required provider or database setting is missing."""
 
-Use these retrieved references only as supporting context; do not fabricate additional sources:
-{source_text or 'No matching reference passages were retrieved.'}
 
-User question:
-{user_query[:4000]}
-"""
+class AIServiceError(Exception):
+    """Raised when an upstream AI or retrieval dependency fails."""
+
+
+def _api_key() -> str:
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        raise AIConfigurationError("GEMINI_API_KEY is not configured.")
+    return key
+
+
+def _database_url() -> str:
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise AIConfigurationError("DATABASE_URL is not configured for vector search.")
+    return url
+
+
+def _vector_literal(values: List[float]) -> str:
+    if len(values) != EMBEDDING_DIMENSIONS:
+        raise AIServiceError(
+            f"Embedding dimension mismatch: expected {EMBEDDING_DIMENSIONS}, got {len(values)}."
+        )
+    vector = [float(value) for value in values]
+    if not all(math.isfinite(value) for value in vector):
+        raise AIServiceError("Embedding contains a non-finite value.")
+    return "[" + ",".join(str(value) for value in vector) + "]"
+
+
+def _gemini_request(model: str, operation: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:{operation}"
     try:
         response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-            params={"key": api_key},
-            json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}},
-            timeout=15,
+            url,
+            params={"key": _api_key()},
+            json=payload,
+            timeout=30,
         )
         response.raise_for_status()
-        payload = response.json()
-        parts = payload.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        return response.json()
+    except requests.RequestException as exc:
+        raise AIServiceError("Gemini request failed. Check provider availability and configuration.") from exc
+    except ValueError as exc:
+        raise AIServiceError("Gemini returned an invalid response.") from exc
+
+
+def _embed_text(text: str, task_type: str) -> List[float]:
+    result = _gemini_request(
+        EMBEDDING_MODEL,
+        "embedContent",
+        {
+            "model": f"models/{EMBEDDING_MODEL}",
+            "content": {"parts": [{"text": text}]},
+            "taskType": task_type,
+            "outputDimensionality": EMBEDDING_DIMENSIONS,
+        },
+    )
+    try:
+        return result["embedding"]["values"]
+    except (KeyError, TypeError) as exc:
+        raise AIServiceError("Gemini returned no embedding.") from exc
+
+
+def index_guideline_corpus() -> int:
+    """Embed and upsert the bundled, non-patient guideline corpus."""
+    database_url = _database_url()
+    _api_key()
+    try:
+        with psycopg.connect(database_url) as connection:
+            for item in GUIDELINE_CORPUS:
+                embedding = _vector_literal(_embed_text(item["chunk_text"], "RETRIEVAL_DOCUMENT"))
+                connection.execute(
+                    """
+                    INSERT INTO rag_document_chunks
+                        (source_key, authority, guideline_title, chunk_text, category, url, embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
+                    ON CONFLICT (source_key) DO UPDATE SET
+                        authority = EXCLUDED.authority,
+                        guideline_title = EXCLUDED.guideline_title,
+                        chunk_text = EXCLUDED.chunk_text,
+                        category = EXCLUDED.category,
+                        url = EXCLUDED.url,
+                        embedding = EXCLUDED.embedding
+                    """,
+                    (
+                        item["source_key"],
+                        item["authority"],
+                        item["guideline_title"],
+                        item["chunk_text"],
+                        item["category"],
+                        item["url"],
+                        embedding,
+                    ),
+                )
+    except psycopg.Error as exc:
+        raise AIServiceError("Could not write guideline embeddings to PostgreSQL.") from exc
+    return len(GUIDELINE_CORPUS)
+
+
+def _retrieve(query: str, limit: int = 4) -> List[Dict[str, Any]]:
+    query_vector = _vector_literal(_embed_text(query, "RETRIEVAL_QUERY"))
+    try:
+        with psycopg.connect(_database_url()) as connection:
+            rows = connection.execute(
+                """
+                SELECT authority, guideline_title, chunk_text, category, url,
+                       1 - (embedding <=> %s::vector) AS similarity
+                FROM rag_document_chunks
+                WHERE embedding IS NOT NULL
+                  AND 1 - (embedding <=> %s::vector) >= %s
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s
+                """,
+                (query_vector, query_vector, 0.35, query_vector, limit),
+            ).fetchall()
+    except psycopg.Error as exc:
+        raise AIServiceError(
+            "PostgreSQL vector retrieval failed; check the schema and guideline index."
+        ) from exc
+    return [
+        {
+            "authority": row[0],
+            "title": row[1],
+            "quote": row[2],
+            "category": row[3],
+            "url": row[4],
+            "similarity": float(row[5]),
+        }
+        for row in rows
+    ]
+
+
+def _generate_answer(query: str, sources: List[Dict[str, Any]]) -> str:
+    source_text = "\n\n".join(
+        f"Source: {item['title']} ({item['authority']})\n"
+        f"Reference passage: {item['quote']}\nURL: {item['url']}"
+        for item in sources
+    )
+    result = _gemini_request(
+        CHAT_MODEL,
+        "generateContent",
+        {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": (
+                                "You are a cautious health-education assistant, not a clinician. "
+                                "Use only the supplied reference passages for factual health claims. "
+                                "Do not diagnose, prescribe, recommend medication or dosage changes, "
+                                "or invent sources. If the passages do not answer the question, say "
+                                "so clearly and recommend consulting a qualified clinician. For "
+                                "possible emergency symptoms, tell the user to contact local "
+                                "emergency services immediately. Keep the answer concise and state "
+                                "that it is general information, not medical advice.\n\n"
+                                f"Retrieved reference passages:\n{source_text}\n\n"
+                                f"User question:\n{query[:4000]}"
+                            )
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {"temperature": 0.2},
+        },
+    )
+    try:
+        parts = result["candidates"][0]["content"]["parts"]
         answer = "\n".join(part.get("text", "") for part in parts).strip()
-        return answer or None
-    except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
-        return None
+    except (KeyError, IndexError, TypeError) as exc:
+        raise AIServiceError("Gemini returned no answer.") from exc
+    if not answer:
+        raise AIServiceError("Gemini returned an empty answer.")
+    return answer
 
 
-def query_rag_engine(
-    user_query: str,
-    patient_context: Dict[str, Any] = None,
-    use_online_ai: bool = False,
-) -> Dict[str, Any]:
-    """
-    Retrieves matching clinical guideline passages and generates grounded context.
-    Contextualizes with patient EHR, biomarkers, active medications, and contraindications.
-    """
-    q_lower = user_query.lower()
-    matched_sources = []
+def query_rag_engine(user_query: str) -> Dict[str, Any]:
+    """Retrieve source passages with pgvector and generate an explicitly grounded answer."""
+    sources = _retrieve(user_query.strip())
+    if not sources:
+        return {
+            "query": user_query,
+            "answer": (
+                "I could not find a matching indexed reference, so I can't provide a "
+                "source-grounded answer. Please consult a qualified health professional."
+            ),
+            "retrieved_sources": [],
+            "provider": "No matching indexed source",
+        }
 
-    for entry in TRUSTED_KNOWLEDGE_BASE:
-        if any(kw in q_lower for kw in entry["keywords"]):
-            matched_sources.append({
-                "title": entry["guideline_title"],
-                "authority": entry["authority"],
-                "quote": entry["citation"],
-                "url": entry["url"]
-            })
-
-    # Default guideline if no specific keywords match
-    if not matched_sources:
-        matched_sources.append({
-            "title": "No matching clinical reference retrieved",
-            "authority": "EasyHealth retrieval notice",
-            "quote": "No topic-specific guideline passage matched this question; verify general guidance with a qualified clinician.",
-            "url": ""
-        })
-
-    # Extract EHR context if provided
-    patient_name = patient_context.get("name", "Patient") if patient_context else "Patient"
-    allergies = patient_context.get("allergies", []) if patient_context else []
-    conditions = patient_context.get("chronicConditions", []) or patient_context.get("conditions", []) if patient_context else []
-    medications = patient_context.get("medications", []) if patient_context else []
-    reports = patient_context.get("reports", []) if patient_context else []
-
-    # Check for allergy contraindications
-    allergy_warning = ""
-    if allergies:
-        active_allergies = [a for a in allergies if a.lower() != "none"]
-        if "penicillin" in [a.lower() for a in active_allergies] and any(kw in q_lower for kw in ["amoxicillin", "augmentin", "penicillin", "ampicillin"]):
-            allergy_warning = "⚠️ CONTRAINDICATION: Your record specifies a Penicillin allergy. Beta-lactam antibiotics must not be prescribed without physician clearance."
-
-    # Build response
-    primary_source = matched_sources[0]
-    ehr_notes = []
-    if conditions:
-        ehr_notes.append(f"Known conditions: {', '.join(conditions)}")
-    if medications:
-        ehr_notes.append(f"Active medications: {', '.join([m.get('name', str(m)) for m in medications])}")
-
-    response_text = f"### Clinical Assessment & Guidance\n\n"
-    if allergy_warning:
-        response_text += f"{allergy_warning}\n\n"
-
-    response_text += (
-        f"Grounded in verified standards from **{primary_source['authority']}** "
-        f"(*{primary_source['title']}*):\n\n"
-        f"• **Guideline Consensus**: {primary_source['quote']}\n"
-    )
-
-    if ehr_notes:
-        response_text += f"\n• **EHR Context ({patient_name})**: {' | '.join(ehr_notes)}.\n"
-
-    response_text += (
-        f"\n**Next Clinical Steps**:\n"
-        f"1. Monitor your symptoms and correlate with your recent lab biomarkers.\n"
-        f"2. Consult your treating specialist before altering medication dosages.\n"
-    )
-
-    online_answer = _generate_online_answer(user_query, matched_sources) if use_online_ai else None
-    if online_answer:
-        response_text = online_answer
-
+    answer = _generate_answer(user_query, sources)
+    public_sources = [
+        {key: value for key, value in source.items() if key != "similarity"}
+        for source in sources
+    ]
     return {
         "query": user_query,
-        "answer": response_text,
-        "retrieved_sources": matched_sources,
-        "provider": "Gemini" if online_answer else "Local guideline retrieval",
-        "grounding_confidence": 0.65 if online_answer else 0.45,
-        "is_emergency": any(kw in q_lower for kw in ["chest pain", "heart attack", "stroke", "unconscious", "emergency"])
+        "answer": answer,
+        "retrieved_sources": public_sources,
+        "provider": "Google Gemini",
     }

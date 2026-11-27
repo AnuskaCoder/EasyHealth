@@ -1,0 +1,58 @@
+import unittest
+from unittest.mock import patch
+
+from services import rag
+
+
+class RagServiceTests(unittest.TestCase):
+    def test_vector_literal_rejects_unexpected_dimensions(self):
+        with self.assertRaises(rag.AIServiceError):
+            rag._vector_literal([0.1, 0.2])
+
+    @patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"})
+    @patch("services.rag._gemini_request")
+    def test_embedding_requests_retrieval_task_and_expected_dimensions(self, request):
+        request.return_value = {"embedding": {"values": [0.0] * rag.EMBEDDING_DIMENSIONS}}
+
+        values = rag._embed_text("blood pressure question", "RETRIEVAL_QUERY")
+
+        self.assertEqual(len(values), rag.EMBEDDING_DIMENSIONS)
+        self.assertEqual(request.call_args.args[1], "embedContent")
+        self.assertEqual(request.call_args.args[2]["taskType"], "RETRIEVAL_QUERY")
+        self.assertEqual(
+            request.call_args.args[2]["outputDimensionality"],
+            rag.EMBEDDING_DIMENSIONS,
+        )
+
+    @patch("services.rag._generate_answer", return_value="Grounded answer")
+    @patch("services.rag._retrieve")
+    def test_query_returns_retrieved_sources_without_internal_scores(self, retrieve, _generate):
+        retrieve.return_value = [
+            {
+                "title": "Guideline",
+                "authority": "Public health organization",
+                "quote": "Consult a qualified clinician.",
+                "category": "general",
+                "url": "https://example.test/guidance",
+                "similarity": 0.8,
+            }
+        ]
+
+        result = rag.query_rag_engine("What should I ask my clinician?")
+
+        self.assertEqual(result["answer"], "Grounded answer")
+        self.assertEqual(result["provider"], "Google Gemini")
+        self.assertNotIn("similarity", result["retrieved_sources"][0])
+
+    @patch("services.rag._generate_answer")
+    @patch("services.rag._retrieve", return_value=[])
+    def test_query_does_not_generate_without_retrieved_sources(self, _retrieve, generate):
+        result = rag.query_rag_engine("Question without a source match")
+
+        self.assertEqual(result["retrieved_sources"], [])
+        self.assertIn("could not find a matching indexed reference", result["answer"])
+        generate.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()

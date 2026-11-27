@@ -13,7 +13,9 @@ function formatPatientFromPg(row) {
     name: row.name,
     age: row.age,
     gender: row.gender,
-    dob: row.dob ? row.dob.toISOString().split("T")[0] : null,
+    dob: row.dob
+      ? (typeof row.dob === "string" ? row.dob.split("T")[0] : row.dob.toISOString().split("T")[0])
+      : null,
     phone: row.phone,
     email: row.email,
     bloodGroup: row.blood_group,

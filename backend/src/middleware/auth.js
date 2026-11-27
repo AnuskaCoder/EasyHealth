@@ -1,6 +1,5 @@
 const jwt = require("jsonwebtoken");
-
-const JWT_SECRET = process.env.JWT_SECRET || "easyhealth-dev-secret-2024";
+const env = require("../config/env");
 
 const authenticate = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -9,7 +8,7 @@ const authenticate = (req, res, next) => {
   }
   const token = authHeader.split(" ")[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {

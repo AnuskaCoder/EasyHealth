@@ -1,64 +1,88 @@
 const express = require("express");
 const { authenticate, requireRole } = require("../middleware/auth");
-const { mem } = require("../config/database");
+const doctorRepository = require("../repositories/doctorRepository");
+const appointmentRepository = require("../repositories/appointmentRepository");
 const router = express.Router();
 
-// GET /api/doctors
-router.get("/", (req, res) => {
-  const { specialty, available, online, search } = req.query;
-  let results = [...mem.doctors];
-  if (specialty && specialty !== "All") results = results.filter(d => d.specialty?.toLowerCase() === specialty.toLowerCase());
-  if (available === "true") results = results.filter(d => d.availableToday);
-  if (online === "true") results = results.filter(d => d.isOnline);
-  if (search) results = results.filter(d => d.name?.toLowerCase().includes(search.toLowerCase()) || d.specialty?.toLowerCase().includes(search.toLowerCase()));
-  res.json({ success: true, count: results.length, data: results });
+router.get("/", async (req, res, next) => {
+  try {
+    const { specialty, available, online, search } = req.query;
+    let results = await doctorRepository.getAll({
+      specialty: specialty && specialty !== "All" ? specialty : undefined,
+      availableToday: available === "true" ? true : undefined,
+    });
+    if (online === "true") results = results.filter(doctor => doctor.online || doctor.isOnline);
+    if (search) {
+      const term = String(search).toLowerCase();
+      results = results.filter(doctor =>
+        doctor.name?.toLowerCase().includes(term) || doctor.specialty?.toLowerCase().includes(term)
+      );
+    }
+    return res.json({ success: true, count: results.length, data: results });
+  } catch (err) {
+    return next(err);
+  }
 });
 
-// GET /api/doctors/specialties
-router.get("/specialties", (req, res) => {
-  const specialties = [...new Set(mem.doctors.map(d => d.specialty).filter(Boolean))].sort();
-  res.json({ success: true, data: specialties });
+router.get("/specialties", async (req, res, next) => {
+  try {
+    const doctors = await doctorRepository.getAll();
+    const specialties = [...new Set(doctors.map(doctor => doctor.specialty).filter(Boolean))].sort();
+    return res.json({ success: true, data: specialties });
+  } catch (err) {
+    return next(err);
+  }
 });
 
-// GET /api/doctors/analytics - doctor dashboard analytics
-router.get("/analytics", authenticate, requireRole("doctor"), (req, res) => {
-  const doctorAppts = mem.appointments.filter(a => a.doctorId === req.user.id || a.doctorId === "d1");
-  res.json({
-    success: true,
-    data: {
-      totalAppointments: doctorAppts.length,
-      todayAppointments: doctorAppts.filter(a => a.date === new Date().toISOString().split("T")[0]).length,
-      completedThisMonth: doctorAppts.filter(a => a.status === "completed").length,
-      pendingReports: 3,
-      monthlyRevenue: doctorAppts.filter(a => a.status === "completed").reduce((s, a) => s + (a.fee || 0), 0),
-      rating: 4.9,
-      avgWaitTimeMins: 8,
-      diseasePrevalence: [
-        { disease: "Hypertension", percentage: 32 },
-        { disease: "Coronary Artery Disease", percentage: 26 },
-        { disease: "Arrhythmia", percentage: 18 },
-        { disease: "Anemia", percentage: 14 },
-        { disease: "Heart Failure", percentage: 10 },
-      ],
-      modalitySplit: { video: 46, inPerson: 38, emergency: 16 },
-    },
-  });
+router.get("/analytics", authenticate, requireRole("doctor"), async (req, res, next) => {
+  try {
+    const doctor = await doctorRepository.findByUserId(req.user.id);
+    const appointments = await appointmentRepository.findByDoctorId(doctor?.id || req.user.id);
+    const completed = appointments.filter(item => item.status === "completed");
+    return res.json({
+      success: true,
+      data: {
+        totalAppointments: appointments.length,
+        todayAppointments: appointments.filter(item => item.date === new Date().toISOString().split("T")[0]).length,
+        completedThisMonth: completed.length,
+        pendingReports: 0,
+        monthlyRevenue: completed.reduce((sum, item) => sum + (item.fee || 0), 0),
+        rating: doctor?.rating || 0,
+        avgWaitTimeMins: null,
+        diseasePrevalence: [],
+        modalitySplit: {
+          video: appointments.filter(item => item.mode === "video").length,
+          inPerson: appointments.filter(item => item.mode === "in-person").length,
+          emergency: appointments.filter(item => item.mode === "emergency").length,
+        },
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
 });
 
-// GET /api/doctors/:id
-router.get("/:id", (req, res) => {
-  const doctor = mem.doctors.find(d => d.id === req.params.id);
-  if (!doctor) return res.status(404).json({ success: false, error: "Doctor not found" });
-  res.json({ success: true, data: doctor });
+router.get("/:id", async (req, res, next) => {
+  try {
+    const doctor = await doctorRepository.findById(req.params.id);
+    if (!doctor) return res.status(404).json({ success: false, error: "Doctor not found" });
+    return res.json({ success: true, data: doctor });
+  } catch (err) {
+    return next(err);
+  }
 });
 
-// PATCH /api/doctors/:id/availability
-router.patch("/:id/availability", authenticate, requireRole("doctor"), (req, res) => {
-  const idx = mem.doctors.findIndex(d => d.userId === req.user.id);
-  if (idx === -1) return res.status(404).json({ success: false, error: "Doctor profile not found" });
-  mem.doctors[idx] = { ...mem.doctors[idx], ...req.body };
-  res.json({ success: true, data: mem.doctors[idx], message: "Availability updated" });
+router.patch("/:id/availability", authenticate, requireRole("doctor"), async (req, res, next) => {
+  try {
+    const doctor = await doctorRepository.findByUserId(req.user.id);
+    if (!doctor || (req.params.id !== doctor.id && req.params.id !== req.user.id)) {
+      return res.status(404).json({ success: false, error: "Doctor profile not found" });
+    }
+    const updated = await doctorRepository.updateByUserId(req.user.id, req.body);
+    return res.json({ success: true, data: updated, message: "Availability updated" });
+  } catch (err) {
+    return next(err);
+  }
 });
 
 module.exports = router;
-

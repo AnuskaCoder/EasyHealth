@@ -189,11 +189,16 @@ Type any question below — symptoms, lab results, medications, diet, or when to
         // Keep emergency triage local-first. The online model receives only the typed question.
         if (onlineAiEnabled && !result.isEmergency) {
           const onlineResult = await askOnlineClinicalAi(trimmed);
-          if (onlineResult?.provider === "Gemini") {
+          if (onlineResult?.provider === "Google Gemini") {
             result = {
               ...result,
               answer: onlineResult.answer,
               sources: onlineResult.retrieved_sources?.length ? onlineResult.retrieved_sources : result.sources,
+            };
+          } else {
+            result = {
+              ...result,
+              answer: `${result.answer}\n\n**Online AI unavailable:** ${onlineResult?.error || "No answer was received."} The local rule-based response is shown instead.`,
             };
           }
         }
@@ -319,11 +324,11 @@ Type any question below — symptoms, lab results, medications, diet, or when to
                   : <div>{renderMarkdown(msg.content)}</div>
                 }
 
-                {/* RAG Sources */}
+                {/* Retrieved references */}
                 {msg.role === "bot" && msg.sources && msg.sources.length > 0 && (
                   <div className="mt-3 pt-2.5 border-t border-gray-100 space-y-1.5">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                      <BookOpen size={10} className="text-blue-500" /> Cited Sources
+                      <BookOpen size={10} className="text-blue-500" /> Retrieved References
                     </p>
                     {msg.sources.map((src, i) => (
                       <div key={i} className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-[11px]">
@@ -331,7 +336,17 @@ Type any question below — symptoms, lab results, medications, diet, or when to
                           <span className="font-semibold text-blue-900 leading-tight">{src.title}</span>
                           <span className="text-blue-500 text-[10px] flex-shrink-0">{src.authority}</span>
                         </div>
-                        <p className="italic text-gray-600 leading-tight">"{src.quote}"</p>
+                        <p className="italic text-gray-600 leading-tight">{src.quote}</p>
+                        {src.url && (
+                          <a
+                            href={src.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-block text-[10px] text-blue-700 underline"
+                          >
+                            Open source
+                          </a>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -416,9 +431,9 @@ Type any question below — symptoms, lab results, medications, diet, or when to
               onChange={e => setOnlineAiEnabled(e.target.checked)}
               className="accent-blue-600"
             />
-            Use configured online AI (optional)
+            Use Gemini + source search (optional)
           </label>
-          <p className="mt-1 pl-5">When enabled, only your typed question is sent to the configured AI service; your profile and reports are not sent. Avoid names or identifying details. If unavailable, the local assistant responds.</p>
+          <p className="mt-1 pl-5">When enabled, only your typed question is sent to Gemini for embedding and answer generation; your profile and reports are not sent. Avoid names or identifying details. If unavailable, the local rule-based answer is shown with an error notice.</p>
         </div>
 
         {/* Input */}

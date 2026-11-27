@@ -6,6 +6,7 @@ const morgan = require("morgan");
 
 const { generalLimiter, authLimiter } = require("./middleware/rateLimiter");
 const errorHandler = require("./middleware/errorHandler");
+const { db } = require("./config/database");
 
 const authRoutes = require("./routes/auth");
 const patientRoutes = require("./routes/patients");
@@ -47,6 +48,7 @@ app.use("/api/auth/register", authLimiter);
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
+    database: db.isPostgres() ? "postgres" : "explicit-memory",
     timestamp: new Date().toISOString(),
     version: "1.0.0",
     environment: process.env.NODE_ENV || "development",
@@ -75,14 +77,18 @@ app.use("*", (req, res) => {
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler);
 
-// ── Start server ──────────────────────────────────────────────────────────────
-// Always start — NODE_ENV=test just suppresses HTTP logging
-app.listen(PORT, () => {
-  if (process.env.NODE_ENV !== "test") {
-    console.log(`\n🏥 EasyHealth Backend running on port ${PORT}`);
-    console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}\n`);
-  }
+// ── Start server after required storage is ready ──────────────────────────────
+db.initialize().then(() => {
+  app.listen(PORT, () => {
+    if (process.env.NODE_ENV !== "test") {
+      console.log(`\n🏥 EasyHealth Backend running on port ${PORT}`);
+      console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}\n`);
+    }
+  });
+}).catch((err) => {
+  console.error("❌ Backend startup failed:", err.message);
+  process.exitCode = 1;
 });
 
 module.exports = app;

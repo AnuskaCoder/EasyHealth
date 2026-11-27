@@ -2,27 +2,43 @@
 EasyHealth AI/ML FastAPI Microservice
 Provides REST endpoints for LLM Report Summarization, RAG Clinical QA, OCR Extraction, and Symptom Triaging.
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Any
+import os
+import logging
 
 from services.summarizer import analyze_report_biomarkers
-from services.rag import query_rag_engine
+from services.rag import AIConfigurationError, AIServiceError, query_rag_engine
 from services.ocr import parse_medical_scan_ocr
 from services.triage import evaluate_symptoms_triage
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
     title="EasyHealth AI/ML Microservice",
-    description="LLM Medical Summarization, RAG Clinical QA, OCR, and Symptom Triaging",
+    description="Opt-in, source-grounded clinical health education using Gemini and pgvector",
     version="1.0.0"
 )
 
-# Enable CORS for React frontend & Node backend
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", os.getenv("FRONTEND_URL", "http://localhost:5173")).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -41,8 +57,6 @@ class SummarizeRequest(BaseModel):
 
 class RagChatRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=4000)
-    patient_context: Optional[Dict[str, Any]] = None
-    use_online_ai: bool = False
 
 class OcrRequest(BaseModel):
     file_name: str
@@ -62,7 +76,7 @@ def health_check():
         "status": "Healthy",
         "service": "EasyHealth Python FastAPI AI Microservice",
         "version": "1.0.0",
-        "capabilities": ["LLM Summarization", "RAG Q&A", "OCR Extraction", "Symptom Triage"]
+        "capabilities": ["Gemini + pgvector Q&A (requires indexed corpus)", "OCR Extraction", "Symptom Triage"]
     }
 
 @app.post("/ai/summarize-report")
@@ -75,12 +89,17 @@ def summarize_report(req: SummarizeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ai/rag-chat")
-def rag_chat(req: RagChatRequest):
+@limiter.limit("20/minute")
+def rag_chat(request: Request, req: RagChatRequest):
     try:
-        result = query_rag_engine(req.query, req.patient_context, req.use_online_ai)
-        return result
+        return query_rag_engine(req.query)
+    except AIConfigurationError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except AIServiceError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Clinical RAG request failed")
+        raise HTTPException(status_code=500, detail="Clinical RAG request failed.")
 
 @app.post("/ai/ocr-extract")
 def ocr_extract(req: OcrRequest):

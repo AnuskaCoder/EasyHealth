@@ -24,6 +24,16 @@ function formatPrescriptionFromPg(row) {
 }
 
 const prescriptionRepository = {
+  async findAll() {
+    if (db.isPostgres()) {
+      const res = await query(
+        `SELECT * FROM doctor_prescriptions ORDER BY date DESC, created_at DESC`
+      );
+      return res.rows.map(formatPrescriptionFromPg);
+    }
+    return mem.prescriptions;
+  },
+
   async findByPatientId(patientId) {
     if (db.isPostgres()) {
       const res = await query(
@@ -64,12 +74,27 @@ const prescriptionRepository = {
     return mem.prescriptions.find(p => p.id === id) || null;
   },
 
-  async create(data) {
+  async create(data, transactionClient = null) {
     const id = data.id || `RX-${Date.now().toString().slice(-6)}`;
     const now = new Date().toISOString();
 
     if (db.isPostgres()) {
-      const res = await query(
+      const runQuery = transactionClient
+        ? transactionClient.query.bind(transactionClient)
+        : query;
+      const patientResult = await runQuery(
+        `SELECT id FROM patient_profiles WHERE user_id::text = $1 OR id::text = $1 LIMIT 1`,
+        [data.patientId]
+      );
+      const doctorResult = await runQuery(
+        `SELECT id FROM doctors WHERE id::text = $1 OR user_id::text = $1 LIMIT 1`,
+        [data.doctorId]
+      );
+      if (!patientResult.rows[0] || !doctorResult.rows[0]) {
+        throw new Error("Patient or doctor profile not found for prescription.");
+      }
+
+      const res = await runQuery(
         `INSERT INTO doctor_prescriptions (
            id, appointment_id, doctor_id, patient_id, doctor_name,
            patient_name, date, diagnosis, vitals_json, medications_json,
@@ -82,8 +107,8 @@ const prescriptionRepository = {
         [
           id,
           data.appointmentId || null,
-          data.doctorId,
-          data.patientId,
+          doctorResult.rows[0].id,
+          patientResult.rows[0].id,
           data.doctorName || "Specialist",
           data.patientName || "Patient",
           data.date || now.split("T")[0],

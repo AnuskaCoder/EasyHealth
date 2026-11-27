@@ -132,6 +132,39 @@ const doctorRepository = {
     };
     mem.doctors.push(doc);
     return doc;
+  },
+
+  async updateByUserId(userId, updates) {
+    const mapping = {
+      availableToday: "available_today",
+      nextSlot: "next_slot",
+      online: "online",
+    };
+
+    if (db.isPostgres()) {
+      const fields = [];
+      const values = [];
+      for (const [key, column] of Object.entries(mapping)) {
+        if (Object.prototype.hasOwnProperty.call(updates, key)) {
+          values.push(updates[key]);
+          fields.push(`${column} = $${values.length}`);
+        }
+      }
+      if (!fields.length) return this.findByUserId(userId);
+      values.push(userId);
+      const result = await query(
+        `UPDATE doctors SET ${fields.join(", ")} WHERE user_id = $${values.length} RETURNING *`,
+        values
+      );
+      return formatDoctorFromPg(result.rows[0]);
+    }
+
+    const doctor = mem.doctors.find(item => item.userId === userId);
+    if (!doctor) return null;
+    for (const key of Object.keys(mapping)) {
+      if (Object.prototype.hasOwnProperty.call(updates, key)) doctor[key] = updates[key];
+    }
+    return doctor;
   }
 };
 

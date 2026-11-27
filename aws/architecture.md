@@ -1,6 +1,6 @@
-# EasyHealth Enterprise Cloud Architecture on AWS
+# EasyHealth Proposed Cloud Architecture on AWS
 
-This document outlines the AWS production infrastructure for EasyHealth across computing, database, caching, AI inference, security, and storage.
+This is a proposed target architecture, not infrastructure currently provisioned for the live application. The current Vercel deployment hosts the frontend only; the complete backend is not deployed there.
 
 ```
                               [ Users / Mobile App / Web ]

@@ -6,7 +6,7 @@
 [![React](https://img.shields.io/badge/React-18.2-61DAFB?style=flat&logo=react)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18-339933?style=flat&logo=node.js)](https://nodejs.org/)
-[![Tests](https://img.shields.io/badge/Tests-28%20passing-brightgreen?style=flat)](src/__tests__)
+[![Tests](https://img.shields.io/badge/Tests-33%20passing-brightgreen?style=flat)](src/__tests__)
 
 **[Live Demo](https://easyhealth-xi.vercel.app) · [GitHub](https://github.com/AnuskaCoder/EasyHealth)**
 
@@ -22,43 +22,39 @@ This is a portfolio project. The sections below clearly distinguish what is full
 
 ---
 
-## 🚀 EasyHealth 2.0 — 8-Week Production Roadmap & Deliverables
+## Current Implementation Status
 
-| Milestone | Deliverables | Verification Status |
-|---|---|---|
-| **Week 1: Database & Backend Foundation** | Robust multi-path `dotenv` initialization, PostgreSQL connection pooling with fallback, Repository pattern, Persistent user registration & login with bcrypt, Database migrations (`npm run migrate`) | ✅ 100% Tested & Verified |
-| **Week 2: Complete Backend CRUD** | Appointment, patient, medical-record, and prescription repositories with full CRUD; direct frontend sync | ✅ 100% Implemented |
-| **Week 3: Security & Access Control** | Refresh-token rotation, resource ownership checks, HIPAA consent lifecycle (`/api/consent`), AES-256 encrypted storage | ✅ 100% Implemented |
-| **Week 4: OCR & Biomarker Extraction** | High-precision regex & rule-based clinical lab scan extraction (CBC, Lipid, LFT, KFT, Thyroid, Glucose) with unit validation | ✅ 100% Implemented |
-| **Week 5: LLM Clinical Integration** | Structured prompt templates (Senior Pathologist), Gemini/OpenAI connection, grounded clinical explanations | ✅ 100% Implemented |
-| **Week 6: RAG Semantic Retrieval & pgvector** | 17+ Guideline knowledge bases (WHO, AHA, ADA, GINA, KDIGO, ATA, ICMR), pgvector schema DDL, citation grounding | ✅ 100% Implemented |
-| **Week 7: Tests, Queue & Monitoring** | End-to-end integration test suite (`npm run test:db` & `integration-test.js`), Redis BullMQ async queues, health metrics | ✅ 100% Passing (13/13) |
-| **Week 8: Docker, CI/CD & Deployment** | Full 5-tier `docker-compose.yml`, multi-stage Dockerfiles, GitHub Actions workflow, Vercel frontend live deployment | ✅ 100% Production Ready |
+| Area | Current status |
+|---|---|
+| OCR and report extraction | Implemented: extracts text from PDFs and images and parses report biomarkers. |
+| Clinical AI assistant | Uses rule-based responses; it is not a fully integrated LLM assistant. |
+| Clinical AI assistant | The primary assistant remains rule-based. A separate opt-in Gemini service now performs embedding-based retrieval against PostgreSQL/pgvector; it requires a Gemini key, database setup, and guideline indexing. |
+| RAG and vector search | Implemented in the separate Python AI service with a small demo corpus. It is not a reviewed clinical knowledge base and is not a substitute for clinical advice. |
+| Database persistence | PostgreSQL is the backend default and startup fails if it cannot connect. In-memory storage is available only with `DATABASE_MODE=memory` for demos. |
+| Deployment | The live Vercel deployment hosts the frontend only. A Render Blueprint is prepared, but the API and AI services have not been deployed. |
 
----
+## Prepared Architecture (Not the Current Live Deployment)
 
-## Architecture & Production Roadmap System
+The diagram shows the implemented service boundaries, not the current live deployment. Only the frontend is currently hosted on Vercel; the Render Blueprint is configuration, not a deployed backend.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                     React Frontend (Vercel)                   │
 │  TypeScript · Tailwind CSS · Vite · pdfjs-dist · Tesseract   │
 └──────────────────┬──────────────────────────────────────────-┘
-                   │ REST API calls (backend-first, demo fallback)
+                   │ REST API calls
 ┌──────────────────▼─────────────────────────────────────────-┐
 │               Express Backend (Node.js 18)                    │
 │  JWT auth · bcrypt · Helmet · Rate limiting · RBAC           │
 │  Routes: auth · patients · doctors · appointments ·          │
 │          records · pharmacy · labs · emergency · prescriptions│
 └──────────────────┬──────────────────────────────────────────-┘
-                   │
-       ┌───────────┴────────────┐
-       ▼                        ▼
-┌─────────────┐        ┌─────────────────┐
-│  PostgreSQL │        │  Redis (cache)  │
-│  (schema    │        │  (session store)│
-│   defined)  │        └─────────────────┘
-└─────────────┘
+                   │ PostgreSQL
+                   ▼
+             ┌──────────────┐
+             │ PostgreSQL + │◄──────── Python AI Service
+             │   pgvector   │          │ Gemini API (opt-in)
+             └──────────────┘
 ```
 
 ---
@@ -80,7 +76,7 @@ This is a portfolio project. The sections below clearly distinguish what is full
 | Doctor dashboard with appointment management | ✅ Working |
 | Doctor analytics dashboard | ✅ Working |
 | Prescription upload with patient sync | ✅ Working |
-| Backend-first login (bcrypt + JWT), demo fallback | ✅ Working |
+| Backend-first login (bcrypt + JWT), frontend demo fallback | ✅ Working |
 | Remember Me — JWT stored in localStorage / sessionStorage | ✅ Working |
 | Role-locked routing (patient vs doctor) | ✅ Working |
 
@@ -91,37 +87,38 @@ This is a portfolio project. The sections below clearly distinguish what is full
 | `POST /api/auth/register` — bcrypt hashing, duplicate check | ✅ Working |
 | `GET /api/doctors` — filter by specialty, availability | ✅ Working |
 | `GET /api/appointments` — ownership-enforced per role | ✅ Working |
-| `POST /api/appointments` — double-booking prevention | ✅ Working |
+| `POST /api/appointments` — double-booking prevention and PostgreSQL persistence | ✅ Working |
 | `GET /api/records` — consent-enforced (doctors need patient grant) | ✅ Working |
 | `POST /api/records` — patient uploads own records only | ✅ Working |
 | `POST /api/pharmacy/order` — server-side price recalculation | ✅ Working |
 | `POST /api/labs/book` — home collection booking | ✅ Working |
-| `POST /api/emergency/admit` — returns persistent reference ID | ✅ Working |
+| `POST /api/emergency/admit` — returns a demo reference ID (not persisted as an admission) | ⚠️ Demo |
 | Audit log entries on record view, create, delete | ✅ Working |
 | Rate limiting (100 req/15min general, 10 req/15min auth) | ✅ Working |
 
 ### Infrastructure
 | Item | Status |
 |---|---|
-| PostgreSQL schema (all tables with indexes + FK) | ✅ Defined |
-| Backend connects to PostgreSQL when `DATABASE_URL` is set | ✅ Working |
-| Docker Compose (frontend + backend + PostgreSQL + Redis) | ✅ Configured |
+| PostgreSQL persistence | ✅ Backend defaults to PostgreSQL; run migrations before use |
+| pgvector + Gemini RAG | ✅ Implemented; requires key, schema, and explicit corpus indexing |
+| Docker Compose (frontend + backend + AI + PostgreSQL + Redis service) | ✅ Configured; local secrets must be set |
 | Multi-stage Docker build for frontend (nginx) | ✅ Working |
 | GitHub Actions CI/CD pipeline | ✅ Working |
-| 28 unit tests (authStorage, reportParser, clinicalAI) | ✅ All passing |
+| 33 unit tests (authStorage, reportParser, clinicalAI) | ✅ All passing |
 
 ---
 
-## ⚠️ Scaffolded / Simulated (Not Yet Production-Ready)
+## ⚠️ Limits and Setup Requirements
 
 | Feature | Actual State |
 |---|---|
-| **Database persistence** | Backend uses in-memory arrays by default. PostgreSQL schema exists and pg driver is installed — connect via `DATABASE_URL` env var. Data resets on backend restart without a database. |
-| **AI chatbot** | Rule-based keyword matching and predefined clinical responses. No LLM API calls, no embeddings, no vector database. Useful for demonstrating clinical knowledge patterns; not a real RAG system. |
+| **Database persistence** | PostgreSQL is the default and is required at startup. Apply the schema with `npm run migrate`; `DATABASE_MODE=memory` is an explicit, non-persistent demo mode. |
+| **AI chatbot** | The main clinical assistant uses rule-based responses. Gemini RAG is a separate, opt-in feature; online requests send only the user's question, not profile or report data. |
+| **RAG knowledge** | The bundled corpus is small and for demonstration only. Review and expand it before any clinical use. Index it with `python scripts/index_guidelines.py` after database migration and configuration. |
 | **Report AI summary** | Rule-based: counts abnormal parameters and constructs a text summary. OCR text extraction using pdfjs-dist and Tesseract.js is real and working. |
-| **Python AI service** (`ai-service/`) | Placeholder FastAPI service. OCR and RAG methods are simulated. Would need an LLM API key (OpenAI/Anthropic) and a vector store (pgvector/Pinecone) to be real. |
+| **Python AI service** (`ai-service/`) | Separate FastAPI service. Gemini requests require `GEMINI_API_KEY`; PostgreSQL/pgvector retrieval is unavailable until the corpus has been indexed. |
 | **Confidence values (0.98, 0.99)** | Hardcoded for demo purposes. Not calibrated measurements. |
-| **Backend deployment** | Only the React frontend is deployed to Vercel. The Express backend runs locally. |
+| **Backend deployment** | The live Vercel deployment hosts only the React frontend. Render configuration exists, but no backend deployment has been completed. |
 
 ---
 
@@ -132,7 +129,7 @@ Patient:  patient@demo.com  /  demo1234
 Doctor:   doctor@demo.com   /  demo1234
 ```
 
-The live demo runs the frontend on Vercel without the backend. Auth falls back to a client-side demo mode (explicitly labelled in the UI). When running locally with the backend, authentication uses the Express API with bcrypt + JWT.
+The live demo runs the frontend on Vercel without the backend. Auth falls back to a client-side demo mode (explicitly labelled in the UI). For a local backend, migrate a PostgreSQL database first; non-production migrations seed database demo accounts, while production migrations skip them. `DATABASE_MODE=memory` is an explicit non-persistent alternative.
 
 ---
 
@@ -155,7 +152,9 @@ npm start
 # Terminal 1 — Backend
 cd backend
 npm install
-cp .env.example .env     # Edit JWT_SECRET at minimum
+cp .env.example .env
+# Set DATABASE_URL, JWT_SECRET (32+ characters), and ENCRYPTION_KEY in backend/.env.
+npm run migrate          # Requires a running PostgreSQL with pgvector available.
 node src/server.js
 
 # Terminal 2 — Frontend
@@ -165,10 +164,11 @@ npm start
 
 ### Run with Docker (requires Docker Desktop)
 ```bash
-cp backend/.env.example backend/.env
-# Edit POSTGRES_PASSWORD and REDIS_PASSWORD in backend/.env
-docker-compose up --build
+cp .env.example .env
+# Replace all placeholder secrets in .env with random values before starting.
+docker compose up --build
 ```
+Generate secrets with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Use a distinct value for each secret; never reuse these demo secrets in production.
 
 ### Deploy API & AI services on Render
 
@@ -176,15 +176,15 @@ The Vercel deployment hosts only the frontend. To enable authenticated API order
 
 1. In Render, choose **New → Blueprint**, connect `AnuskaCoder/EasyHealth`, and select the `main` branch.
 2. The Blueprint uses Render's free plans to avoid charges. Free web services can sleep between requests, and free PostgreSQL expires after 30 days; this is demo-only and must not store real patient data.
-3. The backend container applies `backend/database/schema.sql` before starting. Render generates `JWT_SECRET` and `ENCRYPTION_KEY`; never replace them with the example values.
-4. After the services are created, copy their public URLs into Vercel Production environment variables: `VITE_API_URL` as `<API URL>/api` and `VITE_AI_SERVICE_URL` as the AI service URL. Redeploy the Vercel frontend.
-5. To enable Gemini responses, add `GEMINI_API_KEY` as a secret environment variable on the Render AI service. The clinical rules-based fallback works without it.
+3. Render generates `JWT_SECRET` and `ENCRYPTION_KEY`. The backend image applies the schema before starting; confirm the database has the pgvector extension enabled.
+4. Add `GEMINI_API_KEY` as a secret environment variable on the Render AI service. Once the database is available, set `DATABASE_URL` to its external connection URL and run `python scripts/index_guidelines.py` from `ai-service/`. The corpus is a demo set and should be reviewed before use.
+5. Copy the service URLs into Vercel Production environment variables: `VITE_API_URL` as `<API URL>/api` and `VITE_AI_SERVICE_URL` as the AI service URL. Redeploy the Vercel frontend.
 
 Render resources require a Render account and may incur PostgreSQL charges. Do not use the demo data or service as a substitute for clinical or blood-bank verification.
 
 ### Run Tests
 ```bash
-npm test        # 28 unit tests
+npm test        # 33 unit tests
 ```
 
 ---
@@ -203,14 +203,14 @@ EasyHealth/
 │   │   ├── authStorage.ts        # Session management + demo fallback
 │   │   ├── reportParser.ts       # PDF/OCR + 50-param biomarker extractor
 │   │   └── clinicalAiEngine.ts   # Rule-based clinical response engine
-│   └── __tests__/                # Vitest unit tests (28 passing)
+│   └── __tests__/                # Vitest unit tests (33 passing)
 ├── backend/
 │   ├── src/
 │   │   ├── routes/               # 9 route modules with ownership checks
 │   │   ├── middleware/           # auth (JWT), validate, rateLimit, errorHandler
-│   │   └── config/database.js   # PostgreSQL (when DATABASE_URL set) or in-memory
+│   │   └── config/database.js   # PostgreSQL default; explicit memory demo mode
 │   └── database/schema.sql      # Full PostgreSQL schema
-├── ai-service/                   # Python FastAPI (placeholder — LLM not connected)
+├── ai-service/                   # Python FastAPI with Gemini + pgvector RAG
 ├── Dockerfile                    # Multi-stage nginx frontend build
 ├── backend/Dockerfile            # Node.js production image
 ├── docker-compose.yml            # Full stack with PostgreSQL + Redis
@@ -240,14 +240,14 @@ EasyHealth/
 EasyHealth — Healthcare Management Platform
 React · TypeScript · Node.js · Express · PostgreSQL · Vite · Docker
 
-Developed a full-stack healthcare platform featuring patient and doctor dashboards,
-medical document parsing with pdfjs-dist and Tesseract.js OCR, a rule-based clinical
-AI assistant, and a REST API backend. Implemented JWT authentication with bcrypt
-password hashing, role-based access control with ownership enforcement, server-side
-order price validation, and patient consent management for medical record access.
-Wrote 28 automated unit tests. Configured Docker Compose with PostgreSQL, Redis, and
-multi-stage nginx builds, and a GitHub Actions CI/CD pipeline that tests and deploys
-to Vercel on every push to main.
+Developed a healthcare platform featuring patient and doctor dashboards, medical
+document parsing with pdfjs-dist and Tesseract.js OCR, a rule-based clinical AI
+assistant, an opt-in Gemini + PostgreSQL/pgvector RAG service with a small demo
+corpus, and an Express REST API. Implemented PostgreSQL persistence as the backend
+default, with explicit in-memory demo mode, and JWT authentication with bcrypt
+password hashing, role-based access control, and report biomarker extraction.
+Configured Docker Compose and a GitHub Actions workflow for frontend deployment
+to Vercel. The live Vercel app hosts the frontend, not the complete backend.
 ```
 
 ---
@@ -260,8 +260,8 @@ to Vercel on every push to main.
 | PDF Parsing | pdfjs-dist 3.11 |
 | OCR | Tesseract.js 5.0 |
 | Backend | Node.js 18, Express 4, JWT, bcryptjs, Helmet, express-rate-limit |
-| Database | PostgreSQL 15 (schema defined; pg driver installed) |
-| Cache | Redis 7 (Docker Compose) |
+| Database | PostgreSQL 15 + pgvector (backend default; explicit in-memory demo mode) |
+| Cache | Redis 7 (provisioned in Docker Compose; not integrated with the backend) |
 | Testing | Vitest 1.6, jsdom |
 | DevOps | Docker, docker-compose, GitHub Actions, Vercel |
 

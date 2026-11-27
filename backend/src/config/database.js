@@ -1,7 +1,6 @@
 /**
  * EasyHealth Database Layer
- * - Uses PostgreSQL via pg.Pool when DATABASE_URL is set & available
- * - Falls back cleanly to thread-safe in-memory store for local development / testing
+ * - Uses PostgreSQL by default; in-memory storage must be explicitly enabled
  */
 const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
@@ -9,40 +8,53 @@ const env = require("./env");
 
 let pool = null;
 let usingPostgres = false;
-let connectionAttempted = false;
 
-// ─── PostgreSQL Connection Pool ───────────────────────────────────────────────
-if (env.DATABASE_URL) {
-  try {
-    const { Pool } = require("pg");
-    pool = new Pool({
-      connectionString: env.DATABASE_URL,
-      ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-
-    pool.on("error", (err) => {
-      console.error("[PostgreSQL Pool Error]:", err.message);
-    });
-
-    connectionAttempted = true;
-    pool.connect()
-      .then((client) => {
-        client.release();
-        usingPostgres = true;
-        console.log("✅ Connected to PostgreSQL successfully");
-      })
-      .catch((err) => {
-        console.warn("⚠️  PostgreSQL connection unavailable (" + err.message + ") -> Falling back to in-memory store");
-        usingPostgres = false;
-      });
-  } catch (err) {
-    console.warn("⚠️  pg module initialization error:", err.message);
+async function initialize() {
+  if (!env.JWT_SECRET || env.JWT_SECRET.length < 32) {
+    throw new Error("JWT_SECRET must be configured with at least 32 characters.");
   }
-} else {
-  console.log("ℹ️  No DATABASE_URL configured — running in in-memory mode");
+  if (!env.ENCRYPTION_KEY) {
+    throw new Error("ENCRYPTION_KEY is required.");
+  }
+
+  if (env.DATABASE_MODE === "memory") {
+    seedMemory();
+    console.warn("⚠️  Explicit in-memory mode enabled; backend data will not persist.");
+    return;
+  }
+  if (env.DATABASE_MODE !== "postgres") {
+    throw new Error(`Unsupported DATABASE_MODE: ${env.DATABASE_MODE}`);
+  }
+  if (!env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is required when DATABASE_MODE=postgres.");
+  }
+
+  const { Pool } = require("pg");
+  pool = new Pool({
+    connectionString: env.DATABASE_URL,
+    ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
+  pool.on("error", (err) => {
+    console.error("[PostgreSQL Pool Error]:", err.message);
+  });
+
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (err) {
+    await pool.end();
+    pool = null;
+    throw new Error(
+      `Unable to connect to PostgreSQL: ${err.message || err.code || err.name}`
+    );
+  } finally {
+    if (client) client.release();
+  }
+  usingPostgres = true;
+  console.log("✅ Connected to PostgreSQL successfully");
 }
 
 // ─── Query Helper ─────────────────────────────────────────────────────────────
@@ -273,12 +285,11 @@ function seedMemory() {
   );
 }
 
-seedMemory();
-
 const db = {
   _mem: mem,
   _pool: () => pool,
   isPostgres: () => usingPostgres && pool !== null,
+  initialize,
   query,
   withTransaction,
   getClient,
@@ -287,4 +298,4 @@ const db = {
   },
 };
 
-module.exports = { db, mem, query, withTransaction, getClient };
+module.exports = { db, mem, query, withTransaction, getClient, initialize };

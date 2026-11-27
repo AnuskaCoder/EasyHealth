@@ -3,7 +3,7 @@ const crypto = require("crypto");
 // AES-256-GCM Encryption Key and Algorithm
 const ALGORITHM = "aes-256-gcm";
 function deriveSecretKey(value) {
-  if (!value) return crypto.scryptSync("easyhealth-phi-encryption-secret-2026", "salt", 32);
+  if (!value) throw new Error("ENCRYPTION_KEY is required.");
   const configuredKey = value.trim();
   if (/^[0-9a-f]{64}$/i.test(configuredKey)) return Buffer.from(configuredKey, "hex");
 

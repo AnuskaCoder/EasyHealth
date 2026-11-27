@@ -1,6 +1,8 @@
 const express = require("express");
 const { authenticate } = require("../middleware/auth");
-const { mem } = require("../config/database");
+const { v4: uuidv4 } = require("uuid");
+const { db, mem, query } = require("../config/database");
+const patientRepository = require("../repositories/patientRepository");
 const router = express.Router();
 
 const medicines = [
@@ -34,23 +36,27 @@ router.get("/categories", (req, res) => {
 });
 
 // POST /api/pharmacy/order — recalculate prices server-side, never trust client totals
-router.post("/order", authenticate, (req, res) => {
+router.post("/order", authenticate, async (req, res, next) => {
   const { items, address, couponCode } = req.body;
-  if (!items?.length || !address) {
+  if (!Array.isArray(items) || items.length === 0 || !address) {
     return res.status(422).json({ success: false, error: "items and address are required" });
   }
 
   // Recalculate all prices on the server
   let subtotal = 0;
-  const validatedItems = items.map(item => {
+  const validatedItems = [];
+  for (const item of items) {
     const med = medicines.find(m => m.id === item.id || m.id === item.medicine?.id);
-    if (!med) throw new Error(`Medicine not found: ${item.id}`);
-    if (!med.stock) throw new Error(`${med.name} is out of stock`);
-    const qty = Math.max(1, Math.floor(item.quantity || 1));
+    if (!med) return res.status(422).json({ success: false, error: `Medicine not found: ${item.id}` });
+    if (!med.stock) return res.status(409).json({ success: false, error: `${med.name} is out of stock` });
+    const qty = Number(item.quantity || 1);
+    if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+      return res.status(422).json({ success: false, error: "Each quantity must be an integer between 1 and 100" });
+    }
     const lineTotal = med.finalPrice * qty;
     subtotal += lineTotal;
-    return { medicine: med, quantity: qty, lineTotal };
-  });
+    validatedItems.push({ medicine: med, quantity: qty, lineTotal });
+  }
 
   // Server-side coupon validation
   let discount = 0;
@@ -61,7 +67,7 @@ router.post("/order", authenticate, (req, res) => {
   const total = Math.max(0, subtotal - discount);
 
   const order = {
-    id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+    id: `ORD-${uuidv4()}`,
     patientId: req.user.id,
     items: validatedItems,
     subtotal: Math.round(subtotal * 100) / 100,
@@ -73,24 +79,91 @@ router.post("/order", authenticate, (req, res) => {
     estimatedDelivery: "Today by 6:00 PM",
     createdAt: new Date().toISOString(),
   };
-  mem.orders.push(order);
-  res.status(201).json({ success: true, data: order, message: `Order #${order.id} placed. Estimated delivery: Today by 6:00 PM` });
+  if (db.isPostgres()) {
+    try {
+      const patient = await patientRepository.findByUserId(req.user.id);
+      if (!patient) return res.status(404).json({ success: false, error: "Patient profile not found" });
+      await query(
+        `INSERT INTO pharmacy_orders
+          (id, patient_id, items_json, subtotal, discount, total, status, delivery_address, coupon_applied)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          order.id, patient.id, JSON.stringify(validatedItems), order.subtotal,
+          order.discount, order.total, order.status, order.address, order.couponApplied,
+        ]
+      );
+    } catch (err) {
+      return next(err);
+    }
+  } else {
+    mem.orders.push(order);
+  }
+  return res.status(201).json({ success: true, data: order, message: `Order #${order.id} placed. Estimated delivery: Today by 6:00 PM` });
 });
 
 // GET /api/pharmacy/orders
-router.get("/orders", authenticate, (req, res) => {
-  const orders = mem.orders.filter(o => o.patientId === req.user.id);
-  res.json({ success: true, data: orders, count: orders.length });
+router.get("/orders", authenticate, async (req, res, next) => {
+  try {
+    let orders;
+    if (db.isPostgres()) {
+      const result = await query(
+        `SELECT o.*, p.user_id AS patient_user_id
+         FROM pharmacy_orders o
+         JOIN patient_profiles p ON p.id = o.patient_id
+         WHERE p.user_id = $1
+         ORDER BY o.created_at DESC`,
+        [req.user.id]
+      );
+      orders = result.rows.map(formatOrder);
+    } else {
+      orders = mem.orders.filter(order => order.patientId === req.user.id);
+    }
+    return res.json({ success: true, data: orders, count: orders.length });
+  } catch (err) {
+    return next(err);
+  }
 });
 
 // GET /api/pharmacy/orders/:id — ownership enforced
-router.get("/orders/:id", authenticate, (req, res) => {
-  const order = mem.orders.find(o => o.id === req.params.id);
-  if (!order) return res.status(404).json({ success: false, error: "Order not found" });
-  if (order.patientId !== req.user.id && req.user.role !== "admin") {
-    return res.status(403).json({ success: false, error: "You do not have permission to view this order" });
+router.get("/orders/:id", authenticate, async (req, res, next) => {
+  try {
+    let order;
+    if (db.isPostgres()) {
+      const result = await query(
+        `SELECT o.*, p.user_id AS patient_user_id
+         FROM pharmacy_orders o
+         JOIN patient_profiles p ON p.id = o.patient_id
+         WHERE o.id = $1`,
+        [req.params.id]
+      );
+      order = formatOrder(result.rows[0]);
+    } else {
+      order = mem.orders.find(item => item.id === req.params.id);
+    }
+    if (!order) return res.status(404).json({ success: false, error: "Order not found" });
+    if (order.patientId !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({ success: false, error: "You do not have permission to view this order" });
+    }
+    return res.json({ success: true, data: order });
+  } catch (err) {
+    return next(err);
   }
-  res.json({ success: true, data: order });
 });
+
+function formatOrder(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    patientId: row.patient_user_id,
+    items: row.items_json,
+    subtotal: Number(row.subtotal),
+    discount: Number(row.discount),
+    total: Number(row.total),
+    address: row.delivery_address,
+    couponApplied: row.coupon_applied,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
 
 module.exports = router;
