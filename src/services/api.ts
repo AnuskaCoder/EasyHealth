@@ -4,7 +4,15 @@
  * Falls back gracefully when backend is unreachable (Vercel static demo).
  */
 
-const BACKEND_URL = (import.meta as any).env?.VITE_API_URL || "http://localhost:5000/api";
+// ── Base fetch wrapper ────────────────────────────────────────────────────────
+// Vite env var drives production URLs. In dev the localhost fallback is fine;
+// in production an empty string forces the caller to configure NEXT_PUBLIC_API_URL.
+const rawBackendUrl = (import.meta as any).env?.VITE_API_URL;
+let BACKEND_URL = rawBackendUrl ? rawBackendUrl.replace(/\/$/, "") : "http://localhost:5000/api";
+
+if ((import.meta as any).env?.PROD && !rawBackendUrl) {
+  console.error("[EasyHealth] ⚠️  PRODUCTION: VITE_API_URL is not set. Backend requests will fall back to http://localhost:5000/api and fail in production.");
+}
 
 // ── Token management ──────────────────────────────────────────────────────────
 export function getToken(): string | null {

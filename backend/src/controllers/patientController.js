@@ -5,7 +5,7 @@
 const patientRepository = require("../repositories/patientRepository");
 const recordRepository = require("../repositories/recordRepository");
 const appointmentRepository = require("../repositories/appointmentRepository");
-const { mem: db } = require("../config/database");
+const { db: databaseDb, mem, query } = require("../config/database");
 
 /**
  * GET /api/patients/profile
@@ -57,7 +57,28 @@ async function getHealthStats(req, res, next) {
     }
     const pid = patient.userId || patient.id;
     const records = await recordRepository.findByPatientId(pid);
-    const meds = db.medications.filter(m => (m.patientId === pid || m.patientId === req.user.id) && m.isActive);
+    let meds;
+    if (databaseDb.isPostgres()) {
+      const { rows } = await query(
+        `SELECT * FROM medications WHERE patient_id = $1 AND is_active = TRUE`,
+        [pid]
+      );
+      meds = rows.map(row => ({
+        id: row.id,
+        patientId: row.user_id || row.patient_id,
+        name: row.name,
+        dosage: row.dosage,
+        frequency: row.frequency,
+        startDate: row.start_date,
+        prescribedBy: row.prescribed_by,
+        times: row.times || [],
+        stock: row.stock,
+        instructions: row.instructions,
+        isActive: row.is_active,
+      }));
+    } else {
+      meds = mem.medications.filter(m => (m.patientId === pid || m.patientId === req.user.id) && m.isActive);
+    }
 
     const bmi = patient.height && patient.weight
       ? parseFloat((patient.weight / Math.pow(patient.height / 100, 2)).toFixed(1))
@@ -94,12 +115,54 @@ async function getDashboard(req, res, next) {
 
     const appointments = await appointmentRepository.findByPatientId(pid);
     const records = await recordRepository.findByPatientId(pid);
-    const medications = db.medications
-      .filter(m => (m.patientId === pid || m.patientId === req.user.id) && m.isActive)
-      .slice(0, 5);
-    const orders = db.orders
-      .filter(o => o.patientId === pid || o.patientId === req.user.id)
-      .slice(0, 3);
+    let medications;
+    let orders;
+    if (databaseDb.isPostgres()) {
+      const medResult = await query(
+        `SELECT * FROM medications WHERE patient_id = $1 AND is_active = TRUE ORDER BY start_date DESC LIMIT 5`,
+        [pid]
+      );
+      medications = medResult.rows.map(row => ({
+        id: row.id,
+        patientId: row.user_id || row.patient_id,
+        name: row.name,
+        dosage: row.dosage,
+        frequency: row.frequency,
+        startDate: row.start_date,
+        prescribedBy: row.prescribed_by,
+        times: row.times || [],
+        stock: row.stock,
+        instructions: row.instructions,
+        isActive: row.is_active,
+      }));
+      const orderResult = await query(
+        `SELECT o.*, p.user_id AS patient_user_id
+         FROM pharmacy_orders o
+         JOIN patient_profiles p ON p.id = o.patient_id
+         WHERE p.user_id = $1
+         ORDER BY o.created_at DESC LIMIT 3`,
+        [req.user.id]
+      );
+      orders = orderResult.rows.map(row => ({
+        id: row.id,
+        patientId: row.patient_user_id,
+        items: row.items_json,
+        subtotal: Number(row.subtotal),
+        discount: Number(row.discount),
+        total: Number(row.total),
+        address: row.delivery_address,
+        couponApplied: row.coupon_applied,
+        status: row.status,
+        createdAt: row.created_at,
+      }));
+    } else {
+      medications = mem.medications
+        .filter(m => (m.patientId === pid || m.patientId === req.user.id) && m.isActive)
+        .slice(0, 5);
+      orders = mem.orders
+        .filter(o => o.patientId === pid || o.patientId === req.user.id)
+        .slice(0, 3);
+    }
 
     return res.json({
       success: true,

@@ -4,5 +4,9 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "env": {
+    "VITE_API_URL": "https://easyhealth-api.onrender.com/api",
+    "VITE_AI_SERVICE_URL": "https://easyhealth-ai.onrender.com/ai"
+  }
 }

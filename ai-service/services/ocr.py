@@ -82,61 +82,29 @@ def parse_raw_text_biomarkers(raw_text: str) -> List[Dict[str, Any]]:
 def parse_medical_scan_ocr(file_name: str, document_type: str = "Blood Test", raw_text: Optional[str] = None) -> Dict[str, Any]:
     """
     High-precision extraction pipeline for medical scans and PDFs.
-    Uses regex and rule-based parser on OCR text, with intelligent fallback.
+    Uses regex and rule-based parser on OCR text.
+    Filename-based fallback removed — only actual report data is extracted.
     """
     if raw_text:
         biomarkers = parse_raw_text_biomarkers(raw_text)
         if biomarkers:
+            # Compute confidence based on number of patterns matched out of standard panel
+            total_patterns = len(CLINICAL_REFERENCE_RANGES)
+            matched = len(biomarkers)
+            confidence = round(min(95.0, matched / total_patterns * 100), 1) if total_patterns > 0 else 0.0
             return {
                 "file_name": file_name,
-                "ocr_confidence": 98.4,
+                "ocr_confidence": confidence,
                 "document_type": document_type,
                 "extracted_biomarkers": biomarkers,
                 "summary": f"Extracted {len(biomarkers)} clinical parameters with verified reference ranges."
             }
 
-    # High-fidelity domain fallback when scan is processed via filename/type
-    fn_lower = file_name.lower()
-    if "lipid" in fn_lower:
-        biomarkers = [
-            {"parameter": "Total Cholesterol", "value": "185", "unit": "mg/dL", "referenceRange": "125 - 200", "status": "Normal"},
-            {"parameter": "HDL Cholesterol (Good)", "value": "48", "unit": "mg/dL", "referenceRange": "40 - 60", "status": "Normal"},
-            {"parameter": "LDL Cholesterol (Bad)", "value": "105", "unit": "mg/dL", "referenceRange": "50 - 100", "status": "High"},
-            {"parameter": "Triglycerides", "value": "140", "unit": "mg/dL", "referenceRange": "50 - 150", "status": "Normal"},
-        ]
-        summary = "Lipid Panel extracted: Total Cholesterol is optimal. LDL is mildly elevated at 105 mg/dL."
-    elif "diabetes" in fn_lower or "sugar" in fn_lower or "glucose" in fn_lower:
-        biomarkers = [
-            {"parameter": "Fasting Blood Sugar (FBS)", "value": "98", "unit": "mg/dL", "referenceRange": "70 - 99", "status": "Normal"},
-            {"parameter": "Post-Prandial Glucose (PPBS)", "value": "134", "unit": "mg/dL", "referenceRange": "70 - 140", "status": "Normal"},
-            {"parameter": "Glycated Hemoglobin (HbA1c)", "value": "5.4", "unit": "%", "referenceRange": "4.0 - 5.6", "status": "Normal"},
-        ]
-        summary = "Diabetic screening panel within optimal physiological limits (HbA1c 5.4%)."
-    elif "thyroid" in fn_lower or "tsh" in fn_lower:
-        biomarkers = [
-            {"parameter": "Thyroid Stimulating Hormone (TSH)", "value": "3.1", "unit": "mIU/L", "referenceRange": "0.4 - 4.5", "status": "Normal"},
-        ]
-        summary = "Euthyroid status verified. TSH 3.1 mIU/L within clinical reference range."
-    elif "kidney" in fn_lower or "kft" in fn_lower or "renal" in fn_lower:
-        biomarkers = [
-            {"parameter": "Serum Creatinine", "value": "0.9", "unit": "mg/dL", "referenceRange": "0.6 - 1.2", "status": "Normal"},
-            {"parameter": "Blood Urea Nitrogen (BUN)", "value": "22", "unit": "mg/dL", "referenceRange": "15 - 45", "status": "Normal"},
-        ]
-        summary = "Kidney Function Test normal. Glomerular filtration markers healthy."
-    else:
-        # Complete Blood Count (CBC)
-        biomarkers = [
-            {"parameter": "Hemoglobin", "value": "11.4", "unit": "g/dL", "referenceRange": "12.0 - 16.0", "status": "Low"},
-            {"parameter": "Total Leukocyte Count (WBC)", "value": "7200", "unit": "/μL", "referenceRange": "4000 - 11000", "status": "Normal"},
-            {"parameter": "Platelet Count", "value": "245000", "unit": "/μL", "referenceRange": "150000 - 450000", "status": "Normal"},
-            {"parameter": "Red Blood Cell Count", "value": "4.1", "unit": "million/μL", "referenceRange": "3.8 - 5.4", "status": "Normal"},
-        ]
-        summary = "Complete Blood Count extracted: Mild iron-deficiency anemia detected (Hb 11.4 g/dL). WBC and Platelets normal."
-
+    # No raw text or no biomarkers extracted — request manual entry
     return {
         "file_name": file_name,
-        "ocr_confidence": 98.6,
+        "ocr_confidence": 0.0,
         "document_type": document_type,
-        "extracted_biomarkers": biomarkers,
-        "summary": summary
+        "extracted_biomarkers": [],
+        "summary": "No biomedical parameters could be automatically extracted from this report. Please add parameters manually using the 'Add with Values' option, or provide the raw OCR text for analysis."
     }

@@ -14,7 +14,18 @@ function deriveSecretKey(value) {
   return crypto.scryptSync(configuredKey, "easyhealth-phi-encryption-v1", 32);
 }
 
-const SECRET_KEY = deriveSecretKey(process.env.ENCRYPTION_KEY);
+const SECRET_KEY = (() => {
+  try {
+    return deriveSecretKey(process.env.ENCRYPTION_KEY);
+  } catch {
+    return null;
+  }
+})();
+
+function getSecretKey() {
+  if (!SECRET_KEY) throw new Error("ENCRYPTION_KEY is required for PHI encryption.");
+  return SECRET_KEY;
+}
 
 /**
  * Encrypt sensitive Patient Health Information (PHI)
@@ -24,7 +35,7 @@ const SECRET_KEY = deriveSecretKey(process.env.ENCRYPTION_KEY);
 function encryptPHI(data) {
   const text = typeof data === "object" ? JSON.stringify(data) : String(data);
   const iv = crypto.randomBytes(12); // 96-bit IV recommended for GCM
-  const cipher = crypto.createCipheriv(ALGORITHM, SECRET_KEY, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, getSecretKey(), iv);
 
   let encrypted = cipher.update(text, "utf8", "hex");
   encrypted += cipher.final("hex");
@@ -48,7 +59,7 @@ function decryptPHI(encryptedString) {
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, SECRET_KEY, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, getSecretKey(), iv);
     decipher.setAuthTag(authTag);
 
     let decrypted = decipher.update(encryptedHex, "hex", "utf8");

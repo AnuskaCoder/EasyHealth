@@ -83,9 +83,6 @@ CREATE TABLE IF NOT EXISTS appointments (
     clinical_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS doctor_image VARCHAR(500);
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS patient_age INT;
-ALTER TABLE appointments ADD COLUMN IF NOT EXISTS hospital VARCHAR(255);
 
 -- 5. MEDICAL REPORTS & OCR DATA
 CREATE TABLE IF NOT EXISTS medical_reports (
@@ -95,7 +92,7 @@ CREATE TABLE IF NOT EXISTS medical_reports (
     report_type VARCHAR(100) NOT NULL,
     report_date DATE NOT NULL,
     uploaded_by VARCHAR(255) NOT NULL,
-    file_url VARCHAR(500) NOT NULL,
+    file_url VARCHAR(500),
     ai_summary TEXT,
     biomarkers_json JSONB,
     tags TEXT[] NOT NULL DEFAULT '{}',
@@ -106,14 +103,6 @@ CREATE TABLE IF NOT EXISTS medical_reports (
     deleted_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
-ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(255) NOT NULL DEFAULT '';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
-ALTER TABLE medical_reports ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE medical_reports ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
-ALTER TABLE medical_reports ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
-ALTER TABLE medical_reports ADD COLUMN IF NOT EXISTS file_name VARCHAR(255);
-ALTER TABLE medical_reports ALTER COLUMN file_url DROP NOT NULL;
 
 -- 6. DOCTOR PRESCRIPTIONS TABLE
 CREATE TABLE IF NOT EXISTS doctor_prescriptions (
@@ -180,7 +169,6 @@ CREATE TABLE IF NOT EXISTS home_sample_collections (
     phlebotomist_phone VARCHAR(50),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-ALTER TABLE home_sample_collections ADD COLUMN IF NOT EXISTS package_id VARCHAR(50);
 
 -- 10. CONSENT PERMISSIONS TABLE (HIPAA-Compliant Gating)
 CREATE TABLE IF NOT EXISTS consent_permissions (
@@ -194,9 +182,6 @@ CREATE TABLE IF NOT EXISTS consent_permissions (
     reason TEXT,
     revoked_at TIMESTAMP WITH TIME ZONE
 );
-ALTER TABLE consent_permissions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;
-ALTER TABLE consent_permissions ADD COLUMN IF NOT EXISTS reason TEXT;
-ALTER TABLE consent_permissions ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP WITH TIME ZONE;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_consent_doctor_patient
     ON consent_permissions(doctor_id, patient_id);
 
@@ -248,11 +233,6 @@ CREATE TABLE IF NOT EXISTS rag_document_chunks (
     embedding vector(768),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
-ALTER TABLE rag_document_chunks
-    ADD COLUMN IF NOT EXISTS source_key VARCHAR(255) UNIQUE;
-ALTER TABLE rag_document_chunks
-    ADD COLUMN IF NOT EXISTS embedding vector(768);
 
 CREATE INDEX IF NOT EXISTS idx_rag_category ON rag_document_chunks(category);
 CREATE INDEX IF NOT EXISTS idx_rag_embedding_cosine

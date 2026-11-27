@@ -158,4 +158,35 @@ router.post("/requests/:id/respond", async (req, res, next) => {
   return res.json({ success: true, data: { requestId: request.id, donorsResponded: request.donorUserIds.length } });
 });
 
+// POST /api/blood-bank/requests/:id/match — find compatible donors
+router.post("/requests/:id/match", async (req, res, next) => {
+  try {
+    let request;
+    if (db.isPostgres()) {
+      const { rows } = await db.query(
+        `SELECT blood_group AS "bloodGroup", status FROM blood_requests WHERE id = $1`,
+        [req.params.id]
+      );
+      request = rows[0];
+    } else {
+      const found = mem.bloodRequests.find(r => r.id === req.params.id);
+      request = found ? { bloodGroup: found.bloodGroup, status: found.status } : null;
+    }
+    if (!request) return res.status(404).json({ success: false, error: "Blood request not found" });
+    if (request.status !== "Open") return res.status(409).json({ success: false, error: "Request is not open for matching" });
+
+    const compatibleGroups = ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"];
+    const matched = compatibleGroups.filter(g => g === request.bloodGroup || g.startsWith("O"));
+    res.json({
+      success: true,
+      requestId: req.params.id,
+      compatibleDonorGroups: matched,
+      message: `Potential donors with blood group(s): ${matched.join(", ")}`,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+module.exports = router;
 module.exports = router;

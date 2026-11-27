@@ -97,7 +97,14 @@ export async function registerWithBackend(
   profileData: any,
   rememberMe: boolean
 ): Promise<AuthSession> {
-  const result = await authApi.register({ email, password, name, role, phone });
+  const result = await authApi.register({
+    email,
+    password,
+    name,
+    role,
+    phone,
+    ...(profileData || {}),
+  });
 
   if (result.error || !result.data?.token) {
     throw new Error(result.error || "Registration failed");

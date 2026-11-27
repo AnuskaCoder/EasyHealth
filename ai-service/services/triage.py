@@ -23,6 +23,24 @@ SPECIALIST_MAPPING = {
     "anxiety": "Psychiatrist",
 }
 
+def detect_red_flags(symptoms_text: str, red_flags: List[str]) -> List[str]:
+    """Cross-check provided red flags plus clinically critical keywords."""
+    text = (symptoms_text + " " + " ".join(red_flags)).lower()
+    critical_keywords = [
+        "chest pain", "crushing chest", "shortness of breath", "sob", "difficulty breathing",
+        "severe breathing difficulty", "loss of consciousness", "unconscious", "seizure",
+        "weakness on one side", "slurred speech", "confusion", "altered mental status",
+        "heavy bleeding", "uncontrollable bleeding", "suicidal", "overdose", "high fever",
+        "fever with stiff neck", "head injury", "severe abdominal pain", "blood in stool",
+        "severe allergic reaction", "anaphylaxis", "stroke symptoms", "face drooping",
+    ]
+    detected = [flag for flag in red_flags if flag and flag.lower() in text]
+    for keyword in critical_keywords:
+        if keyword in text and keyword not in detected:
+            detected.append(keyword)
+    return detected
+
+
 def evaluate_symptoms_triage(
     chief_complaint: str,
     duration: str,
@@ -32,7 +50,8 @@ def evaluate_symptoms_triage(
     """
     Computes clinical urgency level, recommended specialist, and triage action.
     """
-    is_emergency = severity >= 8 or len(red_flags) > 0
+    red_flags_detected = detect_red_flags(chief_complaint, red_flags)
+    is_emergency = severity >= 8 or len(red_flags_detected) > 0
     lower_symptom = chief_complaint.lower()
 
     # Find matching specialist

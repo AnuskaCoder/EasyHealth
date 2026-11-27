@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { v4: uuidv4 } = require("uuid");
+const { authenticate } = require("../middleware/auth");
 
 const hospitals = [
   { id: "h1", name: "Apollo Hospitals", address: "21 Greams Lane, Chennai", distance: 1.2, rating: 4.8, phone: "+91-44-28290200", emergency24x7: true, ambulance: true, waitTime: 8, beds: { icu: { total: 40, available: 6 }, emergency: { total: 20, available: 3 }, private: { total: 80, available: 22 }, general: { total: 150, available: 48 } } },
@@ -15,7 +16,7 @@ router.get("/hospitals", (req, res) => {
 });
 
 // POST /api/emergency/admit
-router.post("/admit", (req, res) => {
+router.post("/admit", authenticate, (req, res) => {
   const { hospitalId, bedType, patientName, patientPhone, symptoms } = req.body;
   if (!hospitalId || !patientName || !patientPhone) {
     return res.status(422).json({ success: false, error: "hospitalId, patientName, and patientPhone are required" });
@@ -39,7 +40,7 @@ router.post("/admit", (req, res) => {
 });
 
 // POST /api/emergency/book-bed
-router.post("/book-bed", (req, res) => {
+router.post("/book-bed", authenticate, (req, res) => {
   const { hospitalId, bedType, patientName, patientPhone, patientAge, reason } = req.body;
   if (!hospitalId || !patientName || !patientPhone || !patientAge) {
     return res.status(422).json({ success: false, error: "hospitalId, patientName, patientPhone, patientAge are required" });
