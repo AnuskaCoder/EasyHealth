@@ -83,7 +83,7 @@ export async function loginWithBackend(
 
   return {
     session,
-    profileData: profileResult?.data || user,
+    profileData: profileResult?.data?.patient || user,
   };
 }
 

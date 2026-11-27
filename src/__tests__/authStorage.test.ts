@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   saveSession, loadSession, clearSession,
-  seedDemoAccounts, loginDemo, registerDemo, accountExists,
+  seedDemoAccounts, loginDemo, registerDemo, accountExists, loginWithBackend,
 } from "../services/authStorage";
+import { authApi, patientApi } from "../services/api";
 
 describe("authStorage", () => {
   beforeEach(() => {
@@ -25,6 +26,25 @@ describe("authStorage", () => {
     seedDemoAccounts();
     const acc = loginDemo("doctor@demo.com", "demo1234");
     expect(acc.role).toBe("doctor");
+  });
+
+  it("returns the patient profile instead of the API response envelope after backend login", async () => {
+    const user = { id: "user-1", name: "Test Patient", email: "patient@test.com", role: "patient" };
+    const patient = { ...user, age: 30, bloodGroup: "O+" };
+    vi.spyOn(authApi, "login").mockResolvedValue({
+      data: { token: "test-token", user },
+      error: null,
+      status: 200,
+    });
+    vi.spyOn(patientApi, "getProfile").mockResolvedValue({
+      data: { success: true, patient },
+      error: null,
+      status: 200,
+    });
+
+    const result = await loginWithBackend(user.email, "password", false);
+
+    expect(result.profileData).toEqual(patient);
   });
 
   it("throws on wrong password", () => {
