@@ -41,6 +41,7 @@ export const Navbar: React.FC = () => {
 
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const patientNavLinks = [
     { id: "dashboard", label: "Home" },
@@ -222,31 +223,45 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Profile Button */}
-          <button
-            onClick={() => setCurrentPage(role === "patient" ? "profile" : "doctor-dashboard")}
-            className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-2xl transition-colors"
-          >
-            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-              {role === "patient" ? (patientProfile.name ? patientProfile.name.charAt(0) : "P") : "DR"}
-            </div>
-            <div className="text-left hidden sm:block">
-              <span className="block text-xs font-bold text-gray-900 leading-tight">
-                {currentDisplayName}
-              </span>
-              <span className="block text-[10px] text-gray-400 capitalize">{role}</span>
-            </div>
-          </button>
+          {/* Profile & Sign Out Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+              className="flex items-center gap-2 p-1.5 hover:bg-gray-100 rounded-2xl transition-colors"
+            >
+              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                {role === "patient" ? (patientProfile.name ? patientProfile.name.charAt(0) : "P") : "DR"}
+              </div>
+              <div className="text-left hidden sm:block">
+                <span className="block text-xs font-bold text-gray-900 leading-tight">
+                  {currentDisplayName}
+                </span>
+                <span className="block text-[10px] text-gray-400 capitalize">{role}</span>
+              </div>
+              <ChevronDown size={12} className="ml-1 hidden sm:inline text-gray-400" />
+            </button>
 
-          {/* Logout Button */}
-          <button
-            onClick={logout}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-all"
-            title="Sign out"
-          >
-            <LogOut size={13} />
-            <span className="hidden md:inline">Sign Out</span>
-          </button>
+            {/* Profile Dropdown Menu */}
+            {profileMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95">
+                <div className="px-3 py-2 border-b border-gray-100 mb-2">
+                  <p className="text-xs font-bold text-gray-900">{currentDisplayName}</p>
+                  <p className="text-[10px] text-gray-500 capitalize">{role}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    logout();
+                    setProfileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                  title="Sign out"
+                >
+                  <LogOut size={14} />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Mobile Menu Toggle */}
           <button
