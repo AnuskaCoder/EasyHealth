@@ -1,55 +1,70 @@
-# No-cost demo Blueprint for the API, AI service, and PostgreSQL database.
-# Free Render Postgres expires after 30 days; do not store real patient data.
 services:
   - type: web
     name: easyhealth-api
-    runtime: docker
-    branch: main
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
-    plan: free
-    healthCheckPath: /api/health
+    env: node
+    region: ohio
+    buildCommand: "cd backend && npm install && npm start"
+    startCommand: "cd backend && node src/server.js"
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 5000
       - key: FRONTEND_URL
         value: https://easyhealth-xi.vercel.app
+      - key: DATABASE_MODE
+        value: postgres
       - key: DATABASE_URL
         fromDatabase:
           name: easyhealth-db
           property: connectionString
-      - key: DATABASE_MODE
-        value: postgres
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: easyhealth-redis
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
       - key: ENCRYPTION_KEY
         generateValue: true
+      - key: AI_SERVICE_URL
+        value: https://easyhealth-ai.onrender.com
 
   - type: web
     name: easyhealth-ai
-    runtime: docker
-    branch: main
-    dockerfilePath: ./ai-service/Dockerfile
-    dockerContext: ./ai-service
-    plan: free
-    healthCheckPath: /ai/health
+    env: python
+    region: ohio
+    buildCommand: "cd ai-service && pip install -r requirements.txt"
+    startCommand: "cd ai-service && uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.10
+      - key: PORT
+        value: 8000
       - key: DATABASE_URL
         fromDatabase:
           name: easyhealth-db
           property: connectionString
-      - key: FRONTEND_URL
-        value: https://easyhealth-xi.vercel.app
+      - key: GEMINI_API_KEY
+        sync: false
       - key: GEMINI_MODEL
         value: gemini-2.0-flash
       - key: GEMINI_EMBEDDING_MODEL
         value: text-embedding-004
-      - key: GEMINI_API_KEY
-        sync: false
+      - key: CORS_ORIGINS
+        value: https://easyhealth-xi.vercel.app
+      - key: FRONTEND_URL
+        value: https://easyhealth-xi.vercel.app
 
-# Free Postgres is suitable only for a temporary demo, not production healthcare data.
 databases:
   - name: easyhealth-db
     databaseName: easyhealth
     user: easyhealth
+    ipAllowList: []
+
+  - name: easyhealth-redis
     plan: free
+    region: ohio
+    ipAllowList: []
