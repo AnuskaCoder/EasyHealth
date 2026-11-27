@@ -44,6 +44,10 @@ jobs:
   backend:
     name: Backend — Test & Health Check
     runs-on: ubuntu-latest
+    env:
+      DATABASE_MODE: memory
+      JWT_SECRET: test-jwt-secret-for-ci-only-32-characters
+      ENCRYPTION_KEY: test-encryption-key-for-ci-only-32-characters
     defaults:
       run:
         working-directory: backend

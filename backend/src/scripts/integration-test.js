@@ -39,6 +39,8 @@ async function runTestSuite() {
   }
 
   try {
+    await db.initialize();
+
     // 1. Authentication & Token Rotation
     console.log("\n[Suite 1: Auth & Token Rotation]");
     const uniqueEmail = `integration_${Date.now()}@easyhealth.test`;
