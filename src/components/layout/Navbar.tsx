@@ -18,6 +18,7 @@ import {
   ChevronDown,
   UserPlus,
   LogOut,
+  ArrowLeft,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { UserRole } from "../../types";
@@ -37,6 +38,8 @@ export const Navbar: React.FC = () => {
     markNotificationRead,
     clearAllNotifications,
     logout,
+    goBack,
+    canGoBack,
   } = useApp();
 
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState(false);
@@ -223,6 +226,18 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
+          {/* Back Button (shown when there's history to go back to) */}
+          {canGoBack && (
+            <button
+              onClick={goBack}
+              className="hidden sm:flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-200"
+              title="Go Back"
+            >
+              <ArrowLeft size={13} />
+              <span className="hidden md:inline">Back</span>
+            </button>
+          )}
+
           {/* Profile & Sign Out Dropdown */}
           <div className="relative">
             <button
@@ -277,6 +292,14 @@ export const Navbar: React.FC = () => {
       {mobileMenuOpen && (
         <div className="lg:hidden bg-white border-b border-gray-200 p-4 space-y-2 animate-in slide-in-from-top-2">
           <div className="flex gap-2 mb-2">
+            {canGoBack && (
+              <button
+                onClick={() => { goBack(); setMobileMenuOpen(false); }}
+                className="flex-1 bg-gray-50 text-gray-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 border border-gray-200 hover:bg-gray-100"
+              >
+                <ArrowLeft size={13} /> Back
+              </button>
+            )}
             <button
               onClick={() => {
                 openRegistration();

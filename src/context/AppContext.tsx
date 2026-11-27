@@ -24,6 +24,8 @@ interface AppContextType {
   setRole: (r: UserRole) => void; // internal use only — locked to login role
   currentPage: string;
   setCurrentPage: (p: string) => void;
+  goBack: () => void;
+  canGoBack: boolean;
   // Real-time onboarding & registration
   isRegistered: boolean;
   setIsRegistered: (v: boolean) => void;
@@ -387,6 +389,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return (session?.role as UserRole) || "patient";
   });
   const [currentPage, setCurrentPage] = useState<string>("dashboard");
+  const [pageHistory, setPageHistory] = useState<string[]>(["dashboard"]);
+
+  const handleSetCurrentPage = (p: string) => {
+    setCurrentPage(p);
+    setPageHistory((prev) => {
+      if (prev[prev.length - 1] === p) return prev;
+      return [...prev, p];
+    });
+  };
+
+  const goBack = () => {
+    setPageHistory((prev) => {
+      if (prev.length <= 1) return prev;
+      const updated = prev.slice(0, -1);
+      setCurrentPage(updated[updated.length - 1]);
+      return updated;
+    });
+  };
+
+  const canGoBack = pageHistory.length > 1;
 
   const [patientProfile, setPatientProfile] = useState<PatientProfile>(() => {
     const session = loadSession();
@@ -501,7 +523,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem(`eh_cart_${userId}`, JSON.stringify(cart));
   }, [cart]);
 
-  // ── Fetch backend profile on refresh when not cached ────────────────────────
+  // ── Intercept browser back button to stay within the app ──────────────────────
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+      goBack();
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [goBack]);
   useEffect(() => {
     const session = loadSession();
     if (!session || session.source !== "backend") return;
@@ -804,7 +834,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         role,
         setRole,
         currentPage,
-        setCurrentPage,
+        setCurrentPage: handleSetCurrentPage,
+        goBack,
+        canGoBack,
         isRegistered,
         setIsRegistered,
         openRegistration,
