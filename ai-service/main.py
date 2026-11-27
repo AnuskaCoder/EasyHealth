@@ -11,6 +11,9 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Any
 import os
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from services.summarizer import analyze_report_biomarkers
 from services.rag import (

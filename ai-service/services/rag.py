@@ -149,10 +149,12 @@ def _vector_literal(values: List[float]) -> str:
 
 def _gemini_request(model: str, operation: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:{operation}"
+    headers = {"x-goog-api-key": _api_key()}
     try:
         response = requests.post(
             url,
             params={"key": _api_key()},
+            headers=headers,
             json=payload,
             timeout=30,
         )
