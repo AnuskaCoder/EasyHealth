@@ -8,7 +8,7 @@ import requests
 
 EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_DIMENSIONS = 768
-CHAT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+CHAT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 GUIDELINE_CORPUS = [
     {
         "source_key": "who-anemia",

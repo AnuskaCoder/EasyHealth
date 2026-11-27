@@ -45,7 +45,7 @@ services:
     environment:
       - PORT=8000
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
       - GEMINI_EMBEDDING_MODEL=${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
       - DATABASE_URL=postgresql://easyhealth:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/easyhealth
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
