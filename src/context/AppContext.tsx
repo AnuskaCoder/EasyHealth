@@ -17,6 +17,7 @@ import {
 } from "../types";
 import { doctors } from "../data/doctors";
 import { loadSession, clearSession, seedDemoAccounts, getAccounts } from "../services/authStorage";
+import { patientApi } from "../services/api";
 
 interface AppContextType {
   role: UserRole;
@@ -389,6 +390,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [patientProfile, setPatientProfile] = useState<PatientProfile>(() => {
     const session = loadSession();
+    if (session?.source === "backend") {
+      const saved = localStorage.getItem(`eh_profile_${session.userId}`);
+      if (saved) {
+        try { return JSON.parse(saved) as PatientProfile; } catch {}
+      }
+      return defaultPatient;
+    }
     if (session) {
       const accounts = getAccounts();
       const acc = accounts.find(a => a.id === session.userId);
@@ -399,6 +407,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [activeDoctor, setActiveDoctor] = useState<Doctor>(() => {
     const session = loadSession();
+    if (session?.source === "backend") {
+      const saved = localStorage.getItem(`eh_profile_${session.userId}`);
+      if (saved) {
+        try { return JSON.parse(saved) as Doctor; } catch {}
+      }
+      return doctors[0];
+    }
     if (session) {
       const accounts = getAccounts();
       const acc = accounts.find(a => a.id === session.userId);
@@ -485,6 +500,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const userId = loadSession()?.userId || "guest";
     localStorage.setItem(`eh_cart_${userId}`, JSON.stringify(cart));
   }, [cart]);
+
+  // ── Fetch backend profile on refresh when not cached ────────────────────────
+  useEffect(() => {
+    const session = loadSession();
+    if (!session || session.source !== "backend") return;
+    const cached = localStorage.getItem(`eh_profile_${session.userId}`);
+    if (cached) return;
+    if (session.role === "patient") {
+      patientApi.getProfile().then((result) => {
+        const profile = result.data?.patient;
+        if (profile) {
+          localStorage.setItem(`eh_profile_${session.userId}`, JSON.stringify(profile));
+          setPatientProfile(profile as PatientProfile);
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     const userId = loadSession()?.userId || "guest";

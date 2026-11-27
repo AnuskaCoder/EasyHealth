@@ -9,7 +9,7 @@
  *    This fallback is clearly labelled and NOT suitable for real patient data.
  */
 
-import { setToken, removeToken, authApi } from "./api";
+import { setToken, removeToken, authApi, patientApi } from "./api";
 
 export interface AuthSession {
   role: "patient" | "doctor";
@@ -81,9 +81,13 @@ export async function loginWithBackend(
 
   saveSession(session);
 
+  // Persist profile to localStorage so it survives page refresh
+  const profilePayload = profileResult?.data?.patient || user;
+  localStorage.setItem(`eh_profile_${session.userId}`, JSON.stringify(profilePayload));
+
   return {
     session,
-    profileData: profileResult?.data?.patient || user,
+    profileData: profilePayload,
   };
 }
 
@@ -124,6 +128,8 @@ export async function registerWithBackend(
   };
 
   saveSession(session);
+  localStorage.setItem(`eh_profile_${session.userId}`, JSON.stringify(profileData || user));
+
   return session;
 }
 
