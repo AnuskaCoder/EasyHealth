@@ -9,6 +9,30 @@ class RagServiceTests(unittest.TestCase):
         with self.assertRaises(rag.AIServiceError):
             rag._vector_literal([0.1, 0.2])
 
+    @patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.test/db"})
+    @patch("services.rag.index_guideline_corpus", return_value=len(rag.GUIDELINE_CORPUS))
+    @patch("services.rag.psycopg.connect")
+    def test_ensure_indexes_corpus_when_references_are_missing(self, connect, index):
+        connection = connect.return_value.__enter__.return_value
+        connection.execute.return_value.fetchone.return_value = (0,)
+
+        result = rag.ensure_guideline_corpus_indexed()
+
+        self.assertEqual(result, len(rag.GUIDELINE_CORPUS))
+        index.assert_called_once_with()
+
+    @patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.test/db"})
+    @patch("services.rag.index_guideline_corpus")
+    @patch("services.rag.psycopg.connect")
+    def test_ensure_skips_index_when_corpus_is_complete(self, connect, index):
+        connection = connect.return_value.__enter__.return_value
+        connection.execute.return_value.fetchone.return_value = (len(rag.GUIDELINE_CORPUS),)
+
+        result = rag.ensure_guideline_corpus_indexed()
+
+        self.assertEqual(result, 0)
+        index.assert_not_called()
+
     @patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"})
     @patch("services.rag._gemini_request")
     def test_embedding_requests_retrieval_task_and_expected_dimensions(self, request):

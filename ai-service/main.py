@@ -13,7 +13,12 @@ import os
 import logging
 
 from services.summarizer import analyze_report_biomarkers
-from services.rag import AIConfigurationError, AIServiceError, query_rag_engine
+from services.rag import (
+    AIConfigurationError,
+    AIServiceError,
+    ensure_guideline_corpus_indexed,
+    query_rag_engine,
+)
 from services.ocr import parse_medical_scan_ocr
 from services.triage import evaluate_symptoms_triage
 
@@ -28,6 +33,19 @@ app = FastAPI(
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.on_event("startup")
+def index_bundled_guidelines_if_needed():
+    if not os.getenv("DATABASE_URL") or not os.getenv("GEMINI_API_KEY"):
+        return
+    try:
+        indexed_count = ensure_guideline_corpus_indexed()
+        if indexed_count:
+            logger.info("Indexed %s bundled clinical references.", indexed_count)
+    except AIServiceError:
+        logger.exception("Bundled guideline indexing failed; RAG requests may be unavailable.")
+
 
 allowed_origins = [
     origin.strip()

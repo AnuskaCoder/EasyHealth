@@ -114,7 +114,7 @@ The diagram shows the implemented service boundaries, not the current live deplo
 |---|---|
 | **Database persistence** | PostgreSQL is the default and is required at startup. Apply the schema with `npm run migrate`; `DATABASE_MODE=memory` is an explicit, non-persistent demo mode. |
 | **AI chatbot** | The main clinical assistant uses rule-based responses. Gemini RAG is a separate, opt-in feature; online requests send only the user's question, not profile or report data. |
-| **RAG knowledge** | The bundled corpus is small and for demonstration only. Review and expand it before any clinical use. Index it with `python scripts/index_guidelines.py` after database migration and configuration. |
+| **RAG knowledge** | The bundled corpus is small and for demonstration only. With database and Gemini credentials set, the AI service indexes it on startup when references are missing; run `python scripts/index_guidelines.py` to refresh it manually. Review and expand it before any clinical use. |
 | **Report AI summary** | Rule-based: counts abnormal parameters and constructs a text summary. OCR text extraction using pdfjs-dist and Tesseract.js is real and working. |
 | **Python AI service** (`ai-service/`) | Separate FastAPI service. Gemini requests require `GEMINI_API_KEY`; PostgreSQL/pgvector retrieval is unavailable until the corpus has been indexed. |
 | **Confidence values (0.98, 0.99)** | Hardcoded for demo purposes. Not calibrated measurements. |
@@ -177,7 +177,7 @@ The Vercel deployment hosts only the frontend. To enable authenticated API order
 1. In Render, choose **New → Blueprint**, connect `AnuskaCoder/EasyHealth`, and select the `main` branch.
 2. The Blueprint uses Render's free plans to avoid charges. Free web services can sleep between requests, and free PostgreSQL expires after 30 days; this is demo-only and must not store real patient data.
 3. Render generates `JWT_SECRET` and `ENCRYPTION_KEY`. The backend image applies the schema before starting; confirm the database has the pgvector extension enabled.
-4. Add `GEMINI_API_KEY` as a secret environment variable on the Render AI service. Once the database is available, set `DATABASE_URL` to its external connection URL and run `python scripts/index_guidelines.py` from `ai-service/`. The corpus is a demo set and should be reviewed before use.
+4. Add `GEMINI_API_KEY` as a secret environment variable on the Render AI service. On startup, the service indexes the bundled corpus if references are missing. The corpus is a demo set and should be reviewed before use.
 5. Copy the service URLs into Vercel Production environment variables: `VITE_API_URL` as `<API URL>/api` and `VITE_AI_SERVICE_URL` as the AI service URL. Redeploy the Vercel frontend.
 
 Render resources require a Render account and may incur PostgreSQL charges. Do not use the demo data or service as a substitute for clinical or blood-bank verification.

@@ -217,6 +217,28 @@ def index_guideline_corpus() -> int:
     return len(GUIDELINE_CORPUS)
 
 
+def ensure_guideline_corpus_indexed() -> int:
+    """Index the bundled corpus when one or more references are missing."""
+    database_url = _database_url()
+    source_keys = [item["source_key"] for item in GUIDELINE_CORPUS]
+    try:
+        with psycopg.connect(database_url) as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM rag_document_chunks
+                WHERE source_key = ANY(%s) AND embedding IS NOT NULL
+                """,
+                (source_keys,),
+            ).fetchone()
+    except psycopg.Error as exc:
+        raise AIServiceError("Could not check the guideline index in PostgreSQL.") from exc
+
+    if row[0] == len(source_keys):
+        return 0
+    return index_guideline_corpus()
+
+
 def _retrieve(query: str, limit: int = 4) -> List[Dict[str, Any]]:
     query_vector = _vector_literal(_embed_text(query, "RETRIEVAL_QUERY"))
     try:
